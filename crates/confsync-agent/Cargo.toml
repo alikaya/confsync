@@ -1,0 +1,20 @@
+[package]
+name = "confsync-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "confsync-agent"
+path = "src/main.rs"
+
+[dependencies]
+confsync-core = { path = "../confsync-core" }
+anyhow.workspace = true
+log.workspace = true
+env_logger.workspace = true
+# Tray: saf Rust StatusNotifierItem uygulaması (libappindicator/GTK gerektirmez).
+ksni = { version = "0.3", features = ["blocking"] }
+# Masaüstü bildirimleri (org.freedesktop.Notifications).
+notify-rust = "4"
+chrono.workspace = true

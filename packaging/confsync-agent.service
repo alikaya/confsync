@@ -1,0 +1,20 @@
+[Unit]
+Description=confsync ajanı — yapılandırma değişikliklerini izler
+Documentation=man:confsync-agent(1)
+# Tray ikonu ve bildirimler grafik oturuma bağlıdır.
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/confsync-agent
+Restart=on-failure
+RestartSec=10
+# Tray sunucusu (bar) ajandan sonra hazır olabilir; ilk denemede
+# StatusNotifierWatcher yoksa süreç hata verir ve yeniden denenir.
+StartLimitBurst=5
+StartLimitIntervalSec=120
+Environment=RUST_LOG=info,zbus=warn,tracing=warn
+
+[Install]
+WantedBy=graphical-session.target

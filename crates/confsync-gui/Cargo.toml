@@ -1,0 +1,26 @@
+[package]
+name = "confsync-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "confsync"
+path = "src/main.rs"
+
+[dependencies]
+confsync-core = { path = "../confsync-core" }
+anyhow.workspace = true
+log.workspace = true
+env_logger.workspace = true
+
+# Immediate-mode GUI. Tek ikili dosya üretir, sistem bağımlılığı azdır.
+eframe = { version = "0.31", default-features = false, features = [
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
+egui = "0.31"
+# Yerel dosya/klasör seçme diyalogları (GTK/portal üzerinden).
+rfd = "0.15"

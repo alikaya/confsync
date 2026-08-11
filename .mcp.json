@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ragpilot": {
+      "args": [
+        "--mcp-server"
+      ],
+      "command": "ragpilot",
+      "type": "stdio"
+    }
+  }
+}

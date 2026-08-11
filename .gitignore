@@ -1,0 +1,14 @@
+/target
+**/*.rs.bk
+
+# makepkg çıktıları: paket dosyası ve geçici derleme dizinleri.
+/packaging/pkg/
+/packaging/src/
+*.pkg.tar.zst
+*.pkg.tar.xz
+
+# Yerel RAG dizini (araç önbelleği, kaynak kodun parçası değil).
+/.rag/
+
+# Cargo.lock bilerek izlenir: bu depo ikili dosya üretiyor ve PKGBUILD
+# `cargo build --locked` çağırıyor; kilit dosyası olmadan paket derlenmez.

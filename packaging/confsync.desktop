@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=confsync
+GenericName=Configuration Backup
+GenericName[tr]=Yapılandırma Yedekleyici
+Comment=Back up and restore Linux configuration files with git
+Comment[tr]=Linux yapılandırma dosyalarını git deposuna yedekleyin ve geri yükleyin
+Exec=confsync
+Icon=confsync
+Terminal=false
+Categories=Utility;System;Archiving;
+Keywords=backup;dotfiles;config;git;
+Keywords[tr]=yedek;yapılandırma;ayar;git;
+StartupWMClass=confsync

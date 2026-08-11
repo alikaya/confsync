@@ -1,0 +1,330 @@
+//! confsync ajanı: trayde durur, kaynakları düzenli aralıklarla denetler,
+//! değişiklik bulunca bildirim gönderir.
+//!
+//! Penceresi yoktur. Arayüz gerektiğinde ayrı süreç olarak başlatılır; böylece
+//! ajan hafif kalır (GPU bağlamı, pencere yönetimi yok) ve arayüz çökse bile
+//! denetim sürer.
+//!
+//! Anlık (inotify) izleme bilinçli olarak tercih edilmedi: tam tarama bu ağaç
+//! için saniyenin altında sürüyor, dolayısıyla düzenli yoklama aynı sonucu
+//! watch yönetimi ve editörlerin `rename` davranışıyla uğraşmadan veriyor.
+
+mod tray;
+
+use anyhow::{Context, Result};
+use confsync_core::backup::{self, ChangeReport, NoProgress};
+use confsync_core::settings::Settings;
+use ksni::blocking::TrayMethods;
+use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
+use std::time::{Duration, Instant};
+use tray::{State, Tray};
+
+/// Tray menüsünden ya da bildirim düğmesinden gelen istekler.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cmd {
+    CheckNow,
+    BackupNow,
+    OpenGui,
+    TogglePause,
+    Quit,
+}
+
+fn main() -> Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info,zbus=warn,tracing=warn")).init();
+
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!(
+            "confsync-agent — kaynakları izler, değişiklikte bildirim gönderir\n\n\
+             Kullanım:\n  \
+             confsync-agent            trayde çalışır, düzenli denetler\n  \
+             confsync-agent --once     tek denetim yapıp çıkar (tray yok)\n  \
+             confsync-agent --backup   tek yedekleme yapıp çıkar (tray yok)\n\n\
+             Aralık ve otomatik yedekleme arayüzdeki Ayarlar'dan yönetilir."
+        );
+        return Ok(());
+    }
+
+    // Tek seferlik kipler: systemd timer ya da elle çalıştırma için.
+    if args.iter().any(|a| a == "--once") {
+        let settings = Settings::load().context("ayarlar okunamadı")?;
+        let report = backup::detect_changes(&settings, &mut NoProgress)?;
+        println!("{} (karar bekleyen: {})", report.summary(), report.questions);
+        return Ok(());
+    }
+    if args.iter().any(|a| a == "--backup") {
+        let settings = Settings::load().context("ayarlar okunamadı")?;
+        let report = backup::run(&settings, &mut NoProgress)?;
+        println!(
+            "{} dosya · commit {}",
+            report.stored,
+            report.commit_id.as_deref().unwrap_or("(değişiklik yok)")
+        );
+        return Ok(());
+    }
+
+    run_agent()
+}
+
+fn run_agent() -> Result<()> {
+    let (tx, rx) = channel::<Cmd>();
+    let handle = Tray::new(tx.clone())
+        .spawn()
+        .context("tray oluşturulamadı: masaüstünüzde StatusNotifier desteği var mı?")?;
+    log::info!("ajan başladı, tray ikonu kuruldu");
+
+    let mut paused = false;
+    // İlk denetim hemen yapılır: kullanıcı ajanı açar açmaz durumu görsün.
+    let mut next_check = Instant::now();
+
+    loop {
+        let timeout = next_check.saturating_duration_since(Instant::now());
+        let cmd = match rx.recv_timeout(timeout) {
+            Ok(cmd) => Some(cmd),
+            Err(RecvTimeoutError::Timeout) => None,
+            Err(RecvTimeoutError::Disconnected) => break,
+        };
+
+        let settings = match Settings::load() {
+            Ok(settings) => settings,
+            Err(err) => {
+                log::error!("ayarlar okunamadı: {err:#}");
+                set_state(&handle, State::Error { message: "ayarlar okunamadı".into() });
+                next_check = Instant::now() + Duration::from_secs(300);
+                continue;
+            }
+        };
+        let interval = Duration::from_secs(settings.agent_interval_min.max(1) * 60);
+
+        match cmd {
+            Some(Cmd::Quit) => break,
+            Some(Cmd::OpenGui) => {
+                if let Err(err) = open_gui() {
+                    log::error!("arayüz açılamadı: {err:#}");
+                }
+                continue;
+            }
+            Some(Cmd::TogglePause) => {
+                paused = !paused;
+                handle.update(|tray| {
+                    tray.paused = paused;
+                    tray.state = if paused { State::Paused } else { State::UpToDate };
+                });
+                next_check = Instant::now() + interval;
+                continue;
+            }
+            Some(Cmd::BackupNow) => {
+                run_backup(&handle, &settings);
+                next_check = Instant::now() + interval;
+                continue;
+            }
+            Some(Cmd::CheckNow) => {}
+            None => {
+                if paused {
+                    next_check = Instant::now() + interval;
+                    continue;
+                }
+            }
+        }
+
+        check_cycle(&handle, &settings, &tx);
+        next_check = Instant::now() + interval;
+    }
+
+    log::info!("ajan kapanıyor");
+    handle.shutdown().wait();
+    Ok(())
+}
+
+/// Bir denetim turu: karşılaştır, gerekirse yedekle ya da bildir.
+fn check_cycle(handle: &ksni::blocking::Handle<Tray>, settings: &Settings, tx: &Sender<Cmd>) {
+    set_state(handle, State::Working);
+
+    let report = match backup::detect_changes(settings, &mut NoProgress) {
+        Ok(report) => report,
+        Err(err) => {
+            log::error!("denetim başarısız: {err:#}");
+            set_state(
+                handle,
+                State::Error {
+                    message: first_line(&format!("{err:#}")),
+                },
+            );
+            stamp(handle);
+            return;
+        }
+    };
+
+    log::info!("denetim: {} · karar bekleyen: {}", report.summary(), report.questions);
+
+    if report.is_empty() {
+        set_state(handle, State::UpToDate);
+        stamp(handle);
+        return;
+    }
+
+    // Karar gerektiren dosya varsa ajan asla kendiliğinden yedeklemez:
+    // sır şüpheli bir dosya onay alınmadan depoya (ve uzak depoya) gitmemeli.
+    if report.questions > 0 {
+        set_state(
+            handle,
+            State::NeedsReview {
+                count: report.questions,
+            },
+        );
+        notify_review(&report, tx);
+        stamp(handle);
+        return;
+    }
+
+    if settings.agent_auto_backup {
+        run_backup(handle, settings);
+    } else {
+        set_state(
+            handle,
+            State::Changes {
+                summary: report.summary(),
+            },
+        );
+        notify_changes(&report, tx);
+    }
+    stamp(handle);
+}
+
+fn run_backup(handle: &ksni::blocking::Handle<Tray>, settings: &Settings) {
+    set_state(handle, State::Working);
+    match backup::run(settings, &mut NoProgress) {
+        Ok(report) if report.had_changes() => {
+            log::info!("yedeklendi: {} dosya", report.stored);
+            notify_simple(
+                "Yedeklendi",
+                &format!(
+                    "{} dosya kaydedildi{}",
+                    report.stored,
+                    if report.pushed {
+                        ", uzak depoya gönderildi"
+                    } else {
+                        ""
+                    }
+                ),
+            );
+            set_state(handle, State::UpToDate);
+        }
+        Ok(_) => set_state(handle, State::UpToDate),
+        Err(err) => {
+            log::error!("yedekleme başarısız: {err:#}");
+            let message = first_line(&format!("{err:#}"));
+            notify_simple("Yedekleme başarısız", &message);
+            set_state(handle, State::Error { message });
+        }
+    }
+    stamp(handle);
+}
+
+// --- bildirimler ---------------------------------------------------------
+
+fn notify_changes(report: &ChangeReport, tx: &Sender<Cmd>) {
+    let body = format!("{}\nYedeklemek için tıklayın.", report.summary());
+    spawn_action_notification(
+        "Yapılandırma değişti",
+        &body,
+        &[("backup", "Yedekle"), ("open", "Aç")],
+        tx.clone(),
+    );
+}
+
+fn notify_review(report: &ChangeReport, tx: &Sender<Cmd>) {
+    let body = format!(
+        "{} dosya için kararınız gerekiyor (sır şüphesi ya da boyut sınırı).\n\
+         Onaylanmadan yedeğe girmezler.",
+        report.questions
+    );
+    spawn_action_notification(
+        "confsync: kararınız gerekiyor",
+        &body,
+        &[("open", "Gözden geçir")],
+        tx.clone(),
+    );
+}
+
+fn notify_simple(summary: &str, body: &str) {
+    if let Err(err) = notify_rust::Notification::new()
+        .appname("confsync")
+        .summary(summary)
+        .body(body)
+        .icon("drive-harddisk")
+        .show()
+    {
+        log::warn!("bildirim gönderilemedi: {err}");
+    }
+}
+
+/// Düğmeli bildirim gönderir. Düğmeye basılmasını beklemek engelleyici
+/// olduğundan ayrı bir iş parçacığında beklenir; kullanıcı hiç basmazsa
+/// bildirim kapandığında iş parçacığı da sonlanır.
+fn spawn_action_notification(
+    summary: &str,
+    body: &str,
+    actions: &[(&str, &str)],
+    tx: Sender<Cmd>,
+) {
+    let mut notification = notify_rust::Notification::new();
+    notification
+        .appname("confsync")
+        .summary(summary)
+        .body(body)
+        .icon("drive-harddisk");
+    for (id, label) in actions {
+        notification.action(id, label);
+    }
+
+    let handle = match notification.show() {
+        Ok(handle) => handle,
+        Err(err) => {
+            log::warn!("bildirim gönderilemedi: {err}");
+            return;
+        }
+    };
+
+    std::thread::spawn(move || {
+        handle.wait_for_action(|action| match action {
+            "backup" => {
+                let _ = tx.send(Cmd::BackupNow);
+            }
+            "open" | "default" => {
+                let _ = tx.send(Cmd::OpenGui);
+            }
+            _ => {}
+        });
+    });
+}
+
+// --- yardımcılar ---------------------------------------------------------
+
+/// Arayüzü ayrı süreç olarak başlatır. İkili dosya ajanla aynı dizinde
+/// aranır; kurulu değilse `PATH` denenir.
+fn open_gui() -> Result<()> {
+    let candidate = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join("confsync")))
+        .filter(|p| p.exists());
+
+    let program = candidate.unwrap_or_else(|| "confsync".into());
+    std::process::Command::new(&program)
+        .spawn()
+        .with_context(|| format!("arayüz başlatılamadı: {}", program.display()))?;
+    Ok(())
+}
+
+fn set_state(handle: &ksni::blocking::Handle<Tray>, state: State) {
+    handle.update(|tray| tray.state = state.clone());
+}
+
+fn stamp(handle: &ksni::blocking::Handle<Tray>) {
+    let now = chrono::Local::now().format("%H:%M").to_string();
+    handle.update(|tray| tray.last_check = now.clone());
+}
+
+fn first_line(text: &str) -> String {
+    text.lines().next().unwrap_or(text).to_string()
+}

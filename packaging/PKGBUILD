@@ -1,0 +1,69 @@
+# Maintainer: Ali Kaya <akilaya@outlook.com.tr>
+# Yerel kaynaktan paket üretir: `cd packaging && makepkg -f`
+#
+# Kaynak ağacı indirilmez, deponun kendisi kullanılır ($startdir/..).
+# Böylece elde bulunan `target/release` çıktısı yeniden kullanılır ve
+# paketleme dakikalar yerine saniyeler sürer.
+
+pkgname=confsync
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Linux yapılandırma dosyalarını git deposuna yedekleyen masaüstü uygulaması ve tray ajanı'
+arch=('x86_64')
+url='https://example.com/confsync'
+license=('MIT')
+# Bağımlılıklar ikili dosyalardan ölçülerek çıkarıldı:
+#  - doğrudan bağlananlar: readelf -d (DT_NEEDED)
+#  - çalışma anında dlopen edilenler (winit/glutin bunları böyle yükler):
+#    ikili içindeki soname dizgileri
+depends=('glibc' 'libgcc' 'openssl' 'zlib-ng-compat' 'hicolor-icon-theme'
+         # Aşağıdakiler çalışma anında dlopen edilir; namcap bunları
+         # "gereksiz" sanır ama ikili içindeki soname'ler kanıtlıyor.
+         'libglvnd' 'wayland' 'libxkbcommon' 'libxkbcommon-x11'
+         'libx11' 'libxcb' 'libxcursor' 'libxi')
+makedepends=('cargo')
+source=()
+sha256sums=()
+
+# !lto: makepkg'in LTO seçeneği CFLAGS'e `-flto=auto`, RUSTFLAGS'e
+#       `-C linker-plugin-lto` ekliyor. git2 kendi libgit2'sini `cc` ile
+#       derlediğinden ortaya çıkan arşiv bitcode oluyor ve bağlama
+#       "undefined symbol: git_*" ile düşüyor.
+# !debug: ayrı bir hata ayıklama paketi üretilmesin.
+options=(!lto !debug)
+
+_srcdir="$startdir/.."
+
+build() {
+  cd "$_srcdir"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --release --workspace --locked
+}
+
+check() {
+  cd "$_srcdir"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo test --release --workspace --locked
+}
+
+package() {
+  cd "$_srcdir"
+
+  install -Dm755 target/release/confsync "$pkgdir/usr/bin/confsync"
+  install -Dm755 target/release/confsync-agent "$pkgdir/usr/bin/confsync-agent"
+
+  install -Dm644 packaging/confsync.desktop \
+    "$pkgdir/usr/share/applications/confsync.desktop"
+  install -Dm644 packaging/confsync.svg \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/confsync.svg"
+
+  # Kullanıcı servisi: `systemctl --user enable confsync-agent.service`
+  install -Dm644 packaging/confsync-agent.service \
+    "$pkgdir/usr/lib/systemd/user/confsync-agent.service"
+
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 DESIGN.md "$pkgdir/usr/share/doc/$pkgname/DESIGN.md"
+}

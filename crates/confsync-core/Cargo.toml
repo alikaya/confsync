@@ -1,0 +1,24 @@
+[package]
+name = "confsync-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+walkdir.workspace = true
+libc.workspace = true
+ignore.workspace = true
+git2.workspace = true
+sha2.workspace = true
+dirs.workspace = true
+chrono.workspace = true
+gethostname.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Arayüzdeki marka işareti ve tray ikonuyla aynı biçim: aksan rengi
+       eşkenar dörtgen. Tek renk kullanılır ki küçük boyutlarda okunsun. -->
+  <path d="M32 6 L58 32 L32 58 L6 32 Z" fill="#6E7BFF"/>
+</svg>
