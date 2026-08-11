@@ -170,7 +170,7 @@ pub fn run(settings: &Settings, progress: &mut impl Progress) -> Result<BackupRe
 }
 
 /// Bir dosyanın son yedeğe göre durumu.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ChangeKind {
     Added,
     Modified,
@@ -220,6 +220,23 @@ impl ChangeReport {
     /// Toplam etkilenen bayt (silinenler dahil).
     pub fn bytes(&self) -> u64 {
         self.files.iter().map(|f| f.size).sum()
+    }
+
+    /// Değişiklik kümesinin kimliği.
+    ///
+    /// Ajan bunu, aynı bekleyen değişiklik için tekrar tekrar bildirim
+    /// göndermemek üzere kullanır: yedeklenmemiş bir dosya her denetimde
+    /// yeniden "değişmiş" görünür, ama kullanıcıya bir kez söylemek yeter.
+    /// `files` türe ve yola göre sıralı olduğundan özet çalıştırmalar arasında
+    /// da kararlıdır.
+    pub fn fingerprint(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        for file in &self.files {
+            file.kind.hash(&mut hasher);
+            file.path.hash(&mut hasher);
+        }
+        hasher.finish()
     }
 
     /// Bildirimde ve durum çubuğunda gösterilen tek satırlık özet.

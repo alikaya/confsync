@@ -76,6 +76,10 @@ fn run_agent() -> Result<()> {
     let mut paused = false;
     // İlk denetim hemen yapılır: kullanıcı ajanı açar açmaz durumu görsün.
     let mut next_check = Instant::now();
+    // Son bildirilen değişiklik kümesinin parmak izi. Yedeklenmemiş bir
+    // dosya her turda yeniden "değişmiş" görünür; kullanıcıyı beş dakikada
+    // bir aynı şey için uyarmamak için küme değişmedikçe susulur.
+    let mut last_notified: Option<u64> = None;
 
     loop {
         let timeout = next_check.saturating_duration_since(Instant::now());
@@ -115,10 +119,15 @@ fn run_agent() -> Result<()> {
             }
             Some(Cmd::BackupNow) => {
                 run_backup(&handle, &settings);
+                // Yedek sonrası küme sıfırlanır: bundan sonraki gerçek
+                // değişiklik yeniden bildirilmeli.
+                last_notified = None;
                 next_check = Instant::now() + interval;
                 continue;
             }
-            Some(Cmd::CheckNow) => {}
+            // Kullanıcı elle denetlediyse sonucu görmeyi hak eder; susma
+            // kuralı bu turda uygulanmaz.
+            Some(Cmd::CheckNow) => last_notified = None,
             None => {
                 if paused {
                     next_check = Instant::now() + interval;
@@ -127,7 +136,7 @@ fn run_agent() -> Result<()> {
             }
         }
 
-        check_cycle(&handle, &settings, &tx);
+        check_cycle(&handle, &settings, &tx, &mut last_notified);
         next_check = Instant::now() + interval;
     }
 
@@ -137,7 +146,12 @@ fn run_agent() -> Result<()> {
 }
 
 /// Bir denetim turu: karşılaştır, gerekirse yedekle ya da bildir.
-fn check_cycle(handle: &ksni::blocking::Handle<Tray>, settings: &Settings, tx: &Sender<Cmd>) {
+fn check_cycle(
+    handle: &ksni::blocking::Handle<Tray>,
+    settings: &Settings,
+    tx: &Sender<Cmd>,
+    last_notified: &mut Option<u64>,
+) {
     set_state(handle, State::Working);
 
     let report = match backup::detect_changes(settings, &mut NoProgress) {
@@ -159,8 +173,19 @@ fn check_cycle(handle: &ksni::blocking::Handle<Tray>, settings: &Settings, tx: &
 
     if report.is_empty() {
         set_state(handle, State::UpToDate);
+        *last_notified = None;
         stamp(handle);
         return;
+    }
+
+    // Tray ikonu her zaman güncel durumu gösterir; susturulan yalnızca
+    // açılır bildirimdir.
+    let fingerprint = report.fingerprint();
+    let already_told = *last_notified == Some(fingerprint);
+    if already_told {
+        log::info!("aynı değişiklik kümesi; bildirim tekrarlanmadı");
+    } else {
+        *last_notified = Some(fingerprint);
     }
 
     // Karar gerektiren dosya varsa ajan asla kendiliğinden yedeklemez:
@@ -172,13 +197,16 @@ fn check_cycle(handle: &ksni::blocking::Handle<Tray>, settings: &Settings, tx: &
                 count: report.questions,
             },
         );
-        notify_review(&report, tx);
+        if !already_told {
+            notify_review(&report, tx);
+        }
         stamp(handle);
         return;
     }
 
     if settings.agent_auto_backup {
         run_backup(handle, settings);
+        *last_notified = None;
     } else {
         set_state(
             handle,
@@ -186,7 +214,9 @@ fn check_cycle(handle: &ksni::blocking::Handle<Tray>, settings: &Settings, tx: &
                 summary: report.summary(),
             },
         );
-        notify_changes(&report, tx);
+        if !already_told {
+            notify_changes(&report, tx);
+        }
     }
     stamp(handle);
 }

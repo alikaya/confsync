@@ -7,7 +7,7 @@
 
 pkgname=confsync
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc='Linux yapılandırma dosyalarını git deposuna yedekleyen masaüstü uygulaması ve tray ajanı'
 arch=('x86_64')
 url='https://example.com/confsync'

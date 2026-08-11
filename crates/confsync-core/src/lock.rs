@@ -27,15 +27,21 @@ impl Drop for Guard {
 }
 
 pub fn lock_path(repo_path: &Path) -> PathBuf {
+    use std::hash::{Hash, Hasher};
+
+    // Kilit adı deponun **tam yolundan** türetilir. Yalnızca son dizin adı
+    // kullanılsaydı farklı yerlerdeki iki "repo" dizini aynı kilidi paylaşır,
+    // biri diğerinin yedeklemesini engellerdi.
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    repo_path.hash(&mut hasher);
+    let name = repo_path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "repo".into());
+
     // Depo dizininin kendisi silinip yeniden kurulabildiği için kilit
     // dosyası veri dizininin kökünde tutulur.
-    crate::settings::data_dir().join(format!(
-        "{}.lock",
-        repo_path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "repo".into())
-    ))
+    crate::settings::data_dir().join(format!("{name}-{:016x}.lock", hasher.finish()))
 }
 
 /// Kilidi almaya çalışır; başka bir süreç tutuyorsa hemen hata döner.
@@ -83,5 +89,19 @@ mod tests {
 
         // Bırakıldıktan sonra yeniden alınabilmeli.
         let _second = acquire(&repo).expect("bırakılan kilit yeniden alınmalı");
+    }
+
+    /// Aynı ada sahip iki ayrı depo birbirinin kilidini tutmamalı.
+    #[test]
+    fn farkli_yollardaki_ayni_adli_depolar_ayri_kilit_kullanir() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let repo_a = a.path().join("repo");
+        let repo_b = b.path().join("repo");
+
+        assert_ne!(lock_path(&repo_a), lock_path(&repo_b));
+
+        let _first = acquire(&repo_a).expect("ilk depo kilitlenmeli");
+        let _second = acquire(&repo_b).expect("ikinci depo ayrı kilit almalı");
     }
 }
