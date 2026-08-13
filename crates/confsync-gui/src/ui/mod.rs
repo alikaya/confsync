@@ -33,12 +33,12 @@ impl Tab {
 
     fn label(&self) -> &'static str {
         match self {
-            Tab::Overview => "Genel Bakış",
-            Tab::Sources => "Kaynaklar",
-            Tab::Excludes => "Hariç Tutulanlar",
-            Tab::Restore => "Geri Yükle",
-            Tab::History => "Geçmiş",
-            Tab::Settings => "Ayarlar",
+            Tab::Overview => "Overview",
+            Tab::Sources => "Sources",
+            Tab::Excludes => "Excludes",
+            Tab::Restore => "Restore",
+            Tab::History => "History",
+            Tab::Settings => "Settings",
         }
     }
 
@@ -125,13 +125,13 @@ impl App {
                 Settings::default(),
                 vec![(
                     LogLevel::Warn,
-                    format!("Ayarlar okunamadı, varsayılanlar kullanılıyor: {err:#}"),
+                    format!("Could not read settings, using defaults: {err:#}"),
                 )],
             ),
         };
         log.push((
             LogLevel::Info,
-            format!("Profil: {} · Depo: {}", settings.profile, settings.repo_path.display()),
+            format!("Profile: {} · Repository: {}", settings.profile, settings.repo_path.display()),
         ));
 
         let excludes_text = settings.excludes.join("\n");
@@ -252,9 +252,9 @@ impl App {
         match self.settings.save() {
             Ok(()) => {
                 self.settings_dirty = false;
-                self.info("Ayarlar kaydedildi.");
+                self.info("Settings saved.");
             }
-            Err(err) => self.error(format!("Ayarlar kaydedilemedi: {err:#}")),
+            Err(err) => self.error(format!("Could not save settings: {err:#}")),
         }
     }
 
@@ -266,7 +266,7 @@ impl App {
         }
         self.sync_excludes_from_text();
         self.busy = true;
-        self.stage = "Başlatılıyor".into();
+        self.stage = "Starting".into();
         self.progress = None;
         self.worker.send(Command::PlanBackup(self.settings.clone()));
     }
@@ -290,14 +290,14 @@ impl App {
             if !decided.is_empty() {
                 self.save_settings();
                 self.info(format!(
-                    "{} dosya için karar hatırlanacak; bir daha sorulmayacak.",
+                    "Decision remembered for {} files; they will not be asked about again.",
                     decided.len()
                 ));
             }
         }
 
         self.busy = true;
-        self.stage = "Başlatılıyor".into();
+        self.stage = "Starting".into();
         self.progress = None;
         self.worker.send(Command::ApplyBackup {
             settings: self.settings.clone(),
@@ -307,7 +307,7 @@ impl App {
 
     pub fn cancel_review(&mut self) {
         self.review = None;
-        self.info("Yedekleme iptal edildi; hiçbir dosya değişmedi.");
+        self.info("Backup cancelled; nothing was changed.");
     }
 
     pub fn start_plan_restore(&mut self) {
@@ -339,7 +339,7 @@ impl App {
                     // yok; doğrudan uygulanır (ayarlarda aksi istenmedikçe).
                     if plan.needs_review() || self.settings.always_ask {
                         self.info(format!(
-                            "Tarama bitti: {} dosya yedeğe girecek, {} dosya için kararınız gerekiyor.",
+                            "Scan finished: {} files will be backed up, {} need your decision.",
                             plan.included_count(),
                             plan.question_count()
                         ));
@@ -363,19 +363,19 @@ impl App {
                     if let Some(id) = &report.commit_id {
                         let short = &id[..7.min(id.len())];
                         self.info(format!(
-                            "Yedek tamamlandı: {} dosya, commit {}",
+                            "Backup complete: {} files, commit {}",
                             report.stored, short
                         ));
                     } else {
-                        self.info("Değişiklik yok; yeni commit oluşturulmadı.");
+                        self.info("No changes; no new commit was created.");
                     }
                     if secrets > 0 {
                         self.warn(format!(
-                            "{secrets} dosya sır içerdiği için dışarıda bırakıldı."
+                            "{secrets} files were left out because they may hold secrets."
                         ));
                     }
                     if report.pushed {
-                        self.info("Uzak depoya gönderildi.");
+                        self.info("Pushed to the remote.");
                     }
                     self.last_backup = Some(*report);
                     // Depo büyüdü; Genel Bakış'taki boyut yeniden ölçülsün.
@@ -386,16 +386,16 @@ impl App {
                 }
                 Event::RestorePlanReady(plan) => {
                     self.info(format!(
-                        "Plan hazır: {} madde incelendi.",
+                        "Plan ready: {} items examined.",
                         plan.items.len()
                     ));
                     self.plan = Some(*plan);
                     self.tab = Tab::Restore;
                 }
                 Event::RestoreDone(report) => {
-                    self.info(format!("{} dosya geri yüklendi.", report.written));
+                    self.info(format!("{} files restored.", report.written));
                     if let Some(dir) = &report.rollback_dir {
-                        self.info(format!("Geri alma kopyası: {}", dir.display()));
+                        self.info(format!("Rollback copy: {}", dir.display()));
                     }
                     for (path, err) in &report.failed {
                         self.error(format!("{}: {}", path.display(), err));
@@ -403,11 +403,11 @@ impl App {
                     self.plan = None;
                     self.confirm_restore = false;
                 }
-                Event::Pushed => self.info("Push tamamlandı."),
+                Event::Pushed => self.info("Push complete."),
                 Event::Pulled(outcome) => match outcome {
-                    PullOutcome::UpToDate => self.info("Zaten güncel."),
+                    PullOutcome::UpToDate => self.info("Already up to date."),
                     PullOutcome::FastForwarded => {
-                        self.info("Uzak depodaki değişiklikler alındı.")
+                        self.info("Fetched changes from the remote.")
                     }
                 },
                 Event::History(commits) => self.history = commits,
@@ -430,8 +430,8 @@ impl App {
                         .filter(|c| c.verdict == Verdict::Heavy)
                         .count();
                     self.info(format!(
-                        "~/.config incelendi: {} girdi · {recommended} önerilen · \
-                         {heavy} ağır (yedeğe alınması önerilmez).",
+                        "~/.config inspected: {} entries · {recommended} recommended · \
+                         {heavy} heavy (backing these up is not advised).",
                         candidates.len()
                     ));
                     self.discovery = candidates;
@@ -511,11 +511,11 @@ impl eframe::App for App {
                     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
                         theme::notice(ui, theme::WARN, |ui| {
                             ui.label(
-                                egui::RichText::new("Kaydedilmemiş değişiklik var")
+                                egui::RichText::new("Unsaved changes")
                                     .size(12.0)
                                     .color(theme::WARN),
                             );
-                            if ui.add(theme::ghost_button("Kaydet")).clicked() {
+                            if ui.add(theme::ghost_button("Save")).clicked() {
                                 self.save_settings();
                             }
                         });

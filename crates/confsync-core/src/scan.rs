@@ -25,13 +25,13 @@ pub enum SkipReason {
 impl SkipReason {
     pub fn label(&self) -> &'static str {
         match self {
-            SkipReason::Excluded => "hariç tutuldu",
-            SkipReason::TooLarge => "boyut sınırını aştı",
-            SkipReason::Secret => "sır içerdiği düşünülüyor",
-            SkipReason::Unreadable => "okunamadı",
-            SkipReason::UnsupportedType => "desteklenmeyen dosya türü",
-            SkipReason::NestedRepo => "iç içe git deposu",
-            SkipReason::UserChoice => "hep atla denmiş",
+            SkipReason::Excluded => "excluded",
+            SkipReason::TooLarge => "over the size limit",
+            SkipReason::Secret => "may hold a secret",
+            SkipReason::Unreadable => "unreadable",
+            SkipReason::UnsupportedType => "unsupported file type",
+            SkipReason::NestedRepo => "nested git repository",
+            SkipReason::UserChoice => "marked as always skip",
         }
     }
 
@@ -112,7 +112,7 @@ pub fn build_matcher(excludes: &[String]) -> Result<Gitignore> {
         }
         builder
             .add_line(None, pattern)
-            .with_context(|| format!("geçersiz hariç tutma kalıbı: {pattern}"))?;
+            .with_context(|| format!("invalid exclude pattern: {pattern}"))?;
     }
     Ok(builder.build()?)
 }
@@ -134,7 +134,7 @@ pub fn scan(settings: &Settings, mut progress: impl FnMut(&Path) -> bool) -> Res
             result.skipped.push(SkippedItem {
                 path: source.path.clone(),
                 reason: SkipReason::Unreadable,
-                detail: Some("yol bulunamadı".into()),
+                detail: Some("path not found".into()),
             });
             continue;
         }
@@ -182,7 +182,7 @@ pub fn scan(settings: &Settings, mut progress: impl FnMut(&Path) -> bool) -> Res
                 result.skipped.push(SkippedItem {
                     path: entry.path().to_path_buf(),
                     reason: SkipReason::NestedRepo,
-                    detail: Some("git deposu işaretçisi".into()),
+                    detail: Some("git repository marker".into()),
                 });
                 continue;
             }
@@ -277,7 +277,7 @@ fn classify(path: &Path, is_symlink: bool, max_size: u64, settings: &Settings) -
         return Outcome::Ask(
             item,
             SkipReason::TooLarge,
-            Some(format!("sınır {} MiB", settings.max_file_size_mb)),
+            Some(format!("limit {} MiB", settings.max_file_size_mb)),
         );
     }
 

@@ -25,14 +25,14 @@ pub enum State {
 impl State {
     fn line(&self) -> String {
         match self {
-            State::UpToDate => "Her şey yedeklendi".into(),
-            State::Changes { summary } => format!("Bekleyen değişiklik: {summary}"),
+            State::UpToDate => "Everything is backed up".into(),
+            State::Changes { summary } => format!("Pending changes: {summary}"),
             State::NeedsReview { count } => {
-                format!("{count} dosya kararınızı bekliyor")
+                format!("{count} files need your decision")
             }
-            State::Working => "Yedekleniyor…".into(),
-            State::Paused => "Duraklatıldı".into(),
-            State::Error { message } => format!("Hata: {message}"),
+            State::Working => "Backing up…".into(),
+            State::Paused => "Paused".into(),
+            State::Error { message } => format!("Error: {message}"),
         }
     }
 
@@ -60,7 +60,7 @@ impl Tray {
     pub fn new(tx: Sender<Cmd>) -> Self {
         Self {
             state: State::UpToDate,
-            last_check: "henüz denetlenmedi".into(),
+            last_check: "not checked yet".into(),
             paused: false,
             tx,
         }
@@ -68,7 +68,7 @@ impl Tray {
 
     fn send(&self, cmd: Cmd) {
         if self.tx.send(cmd).is_err() {
-            log::warn!("ana döngü kapanmış, komut iletilemedi");
+            log::warn!("main loop closed, command not delivered");
         }
     }
 }
@@ -90,7 +90,7 @@ impl ksni::Tray for Tray {
     fn tool_tip(&self) -> ToolTip {
         ToolTip {
             title: "confsync".into(),
-            description: format!("{}\nSon denetim: {}", self.state.line(), self.last_check),
+            description: format!("{}\nLast check: {}", self.state.line(), self.last_check),
             ..Default::default()
         }
     }
@@ -110,21 +110,21 @@ impl ksni::Tray for Tray {
             }
             .into(),
             StandardItem {
-                label: format!("Son denetim: {}", self.last_check),
+                label: format!("Last check: {}", self.last_check),
                 enabled: false,
                 ..Default::default()
             }
             .into(),
             MenuItem::Separator,
             StandardItem {
-                label: "Şimdi denetle".into(),
+                label: "Check now".into(),
                 enabled: !busy,
                 activate: Box::new(|tray: &mut Self| tray.send(Cmd::CheckNow)),
                 ..Default::default()
             }
             .into(),
             StandardItem {
-                label: "Şimdi yedekle".into(),
+                label: "Back up now".into(),
                 enabled: !busy,
                 activate: Box::new(|tray: &mut Self| tray.send(Cmd::BackupNow)),
                 ..Default::default()
@@ -132,16 +132,16 @@ impl ksni::Tray for Tray {
             .into(),
             MenuItem::Separator,
             StandardItem {
-                label: "confsync'i aç".into(),
+                label: "Open confsync".into(),
                 activate: Box::new(|tray: &mut Self| tray.send(Cmd::OpenGui)),
                 ..Default::default()
             }
             .into(),
             StandardItem {
                 label: if self.paused {
-                    "Denetimi sürdür".into()
+                    "Resume checking".into()
                 } else {
-                    "Denetimi duraklat".to_string()
+                    "Pause checking".to_string()
                 },
                 activate: Box::new(|tray: &mut Self| tray.send(Cmd::TogglePause)),
                 ..Default::default()
@@ -149,7 +149,7 @@ impl ksni::Tray for Tray {
             .into(),
             MenuItem::Separator,
             StandardItem {
-                label: "Çık".into(),
+                label: "Quit".into(),
                 activate: Box::new(|tray: &mut Self| tray.send(Cmd::Quit)),
                 ..Default::default()
             }

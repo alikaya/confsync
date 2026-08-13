@@ -67,9 +67,9 @@ impl Manifest {
 
     pub fn load(path: &Path) -> Result<Self> {
         let raw = std::fs::read_to_string(path)
-            .with_context(|| format!("manifest okunamadı: {}", path.display()))?;
+            .with_context(|| format!("could not read manifest: {}", path.display()))?;
         let manifest: Manifest = serde_json::from_str(&raw)
-            .with_context(|| format!("manifest ayrıştırılamadı: {}", path.display()))?;
+            .with_context(|| format!("could not parse manifest: {}", path.display()))?;
         Ok(manifest)
     }
 
@@ -80,7 +80,7 @@ impl Manifest {
         // Okunabilir ve diff'i temiz olsun diye pretty JSON.
         let raw = serde_json::to_string_pretty(self)?;
         std::fs::write(path, raw)
-            .with_context(|| format!("manifest yazılamadı: {}", path.display()))?;
+            .with_context(|| format!("could not write manifest: {}", path.display()))?;
         Ok(())
     }
 

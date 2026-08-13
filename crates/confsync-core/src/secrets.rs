@@ -18,9 +18,9 @@ pub enum SecretReason {
 impl SecretReason {
     pub fn description(&self) -> &'static str {
         match self {
-            SecretReason::KnownName => "dosya adı bilinen bir kimlik/anahtar dosyasıyla eşleşiyor",
-            SecretReason::PrivateKeyHeader => "içerikte özel anahtar başlığı bulundu",
-            SecretReason::CredentialAssignment => "içerikte parola/token ataması bulundu",
+            SecretReason::KnownName => "file name matches a known credential or key file",
+            SecretReason::PrivateKeyHeader => "content contains a private key header",
+            SecretReason::CredentialAssignment => "content contains a password or token assignment",
         }
     }
 }

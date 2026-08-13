@@ -35,30 +35,30 @@ fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
-            "confsync-agent — kaynakları izler, değişiklikte bildirim gönderir\n\n\
-             Kullanım:\n  \
-             confsync-agent            trayde çalışır, düzenli denetler\n  \
-             confsync-agent --once     tek denetim yapıp çıkar (tray yok)\n  \
-             confsync-agent --backup   tek yedekleme yapıp çıkar (tray yok)\n\n\
-             Aralık ve otomatik yedekleme arayüzdeki Ayarlar'dan yönetilir."
+            "confsync-agent — watches sources and notifies on change\n\n\
+             Usage:\n  \
+             confsync-agent            run in the tray, check on a schedule\n  \
+             confsync-agent --once     run one check and exit (no tray)\n  \
+             confsync-agent --backup   run one backup and exit (no tray)\n\n\
+             Interval and automatic backup are managed in the app's Settings."
         );
         return Ok(());
     }
 
     // Tek seferlik kipler: systemd timer ya da elle çalıştırma için.
     if args.iter().any(|a| a == "--once") {
-        let settings = Settings::load().context("ayarlar okunamadı")?;
+        let settings = Settings::load().context("could not read settings")?;
         let report = backup::detect_changes(&settings, &mut NoProgress)?;
-        println!("{} (karar bekleyen: {})", report.summary(), report.questions);
+        println!("{} (awaiting decision: {})", report.summary(), report.questions);
         return Ok(());
     }
     if args.iter().any(|a| a == "--backup") {
-        let settings = Settings::load().context("ayarlar okunamadı")?;
+        let settings = Settings::load().context("could not read settings")?;
         let report = backup::run(&settings, &mut NoProgress)?;
         println!(
-            "{} dosya · commit {}",
+            "{} files · commit {}",
             report.stored,
-            report.commit_id.as_deref().unwrap_or("(değişiklik yok)")
+            report.commit_id.as_deref().unwrap_or("(no changes)")
         );
         return Ok(());
     }
@@ -70,8 +70,8 @@ fn run_agent() -> Result<()> {
     let (tx, rx) = channel::<Cmd>();
     let handle = Tray::new(tx.clone())
         .spawn()
-        .context("tray oluşturulamadı: masaüstünüzde StatusNotifier desteği var mı?")?;
-    log::info!("ajan başladı, tray ikonu kuruldu");
+        .context("could not create tray: does your desktop support StatusNotifier?")?;
+    log::info!("agent started, tray icon registered");
 
     let mut paused = false;
     // İlk denetim hemen yapılır: kullanıcı ajanı açar açmaz durumu görsün.
@@ -92,8 +92,8 @@ fn run_agent() -> Result<()> {
         let settings = match Settings::load() {
             Ok(settings) => settings,
             Err(err) => {
-                log::error!("ayarlar okunamadı: {err:#}");
-                set_state(&handle, State::Error { message: "ayarlar okunamadı".into() });
+                log::error!("could not read settings: {err:#}");
+                set_state(&handle, State::Error { message: "could not read settings".into() });
                 next_check = Instant::now() + Duration::from_secs(300);
                 continue;
             }
@@ -104,7 +104,7 @@ fn run_agent() -> Result<()> {
             Some(Cmd::Quit) => break,
             Some(Cmd::OpenGui) => {
                 if let Err(err) = open_gui() {
-                    log::error!("arayüz açılamadı: {err:#}");
+                    log::error!("could not open the app: {err:#}");
                 }
                 continue;
             }
@@ -140,7 +140,7 @@ fn run_agent() -> Result<()> {
         next_check = Instant::now() + interval;
     }
 
-    log::info!("ajan kapanıyor");
+    log::info!("agent shutting down");
     handle.shutdown().wait();
     Ok(())
 }
@@ -157,7 +157,7 @@ fn check_cycle(
     let report = match backup::detect_changes(settings, &mut NoProgress) {
         Ok(report) => report,
         Err(err) => {
-            log::error!("denetim başarısız: {err:#}");
+            log::error!("check failed: {err:#}");
             set_state(
                 handle,
                 State::Error {
@@ -169,7 +169,7 @@ fn check_cycle(
         }
     };
 
-    log::info!("denetim: {} · karar bekleyen: {}", report.summary(), report.questions);
+    log::info!("check: {} · awaiting decision: {}", report.summary(), report.questions);
 
     if report.is_empty() {
         set_state(handle, State::UpToDate);
@@ -183,7 +183,7 @@ fn check_cycle(
     let fingerprint = report.fingerprint();
     let already_told = *last_notified == Some(fingerprint);
     if already_told {
-        log::info!("aynı değişiklik kümesi; bildirim tekrarlanmadı");
+        log::info!("same change set; notification not repeated");
     } else {
         *last_notified = Some(fingerprint);
     }
@@ -225,14 +225,14 @@ fn run_backup(handle: &ksni::blocking::Handle<Tray>, settings: &Settings) {
     set_state(handle, State::Working);
     match backup::run(settings, &mut NoProgress) {
         Ok(report) if report.had_changes() => {
-            log::info!("yedeklendi: {} dosya", report.stored);
+            log::info!("backed up: {} files", report.stored);
             notify_simple(
-                "Yedeklendi",
+                "Backed up",
                 &format!(
-                    "{} dosya kaydedildi{}",
+                    "{} files stored{}",
                     report.stored,
                     if report.pushed {
-                        ", uzak depoya gönderildi"
+                        ", pushed to the remote"
                     } else {
                         ""
                     }
@@ -242,9 +242,9 @@ fn run_backup(handle: &ksni::blocking::Handle<Tray>, settings: &Settings) {
         }
         Ok(_) => set_state(handle, State::UpToDate),
         Err(err) => {
-            log::error!("yedekleme başarısız: {err:#}");
+            log::error!("backup failed: {err:#}");
             let message = first_line(&format!("{err:#}"));
-            notify_simple("Yedekleme başarısız", &message);
+            notify_simple("Backup failed", &message);
             set_state(handle, State::Error { message });
         }
     }
@@ -254,25 +254,25 @@ fn run_backup(handle: &ksni::blocking::Handle<Tray>, settings: &Settings) {
 // --- bildirimler ---------------------------------------------------------
 
 fn notify_changes(report: &ChangeReport, tx: &Sender<Cmd>) {
-    let body = format!("{}\nYedeklemek için tıklayın.", report.summary());
+    let body = format!("{}\nClick to back up.", report.summary());
     spawn_action_notification(
-        "Yapılandırma değişti",
+        "Configuration changed",
         &body,
-        &[("backup", "Yedekle"), ("open", "Aç")],
+        &[("backup", "Back up"), ("open", "Open")],
         tx.clone(),
     );
 }
 
 fn notify_review(report: &ChangeReport, tx: &Sender<Cmd>) {
     let body = format!(
-        "{} dosya için kararınız gerekiyor (sır şüphesi ya da boyut sınırı).\n\
-         Onaylanmadan yedeğe girmezler.",
+        "{} files need your decision (secret suspicion or size limit).\n\
+         They will not be backed up until you approve.",
         report.questions
     );
     spawn_action_notification(
-        "confsync: kararınız gerekiyor",
+        "confsync: your decision is needed",
         &body,
-        &[("open", "Gözden geçir")],
+        &[("open", "Review")],
         tx.clone(),
     );
 }
@@ -285,7 +285,7 @@ fn notify_simple(summary: &str, body: &str) {
         .icon("drive-harddisk")
         .show()
     {
-        log::warn!("bildirim gönderilemedi: {err}");
+        log::warn!("could not send notification: {err}");
     }
 }
 
@@ -311,7 +311,7 @@ fn spawn_action_notification(
     let handle = match notification.show() {
         Ok(handle) => handle,
         Err(err) => {
-            log::warn!("bildirim gönderilemedi: {err}");
+            log::warn!("could not send notification: {err}");
             return;
         }
     };
@@ -342,7 +342,7 @@ fn open_gui() -> Result<()> {
     let program = candidate.unwrap_or_else(|| "confsync".into());
     std::process::Command::new(&program)
         .spawn()
-        .with_context(|| format!("arayüz başlatılamadı: {}", program.display()))?;
+        .with_context(|| format!("could not start the app: {}", program.display()))?;
     Ok(())
 }
 

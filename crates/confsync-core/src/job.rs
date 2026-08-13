@@ -97,7 +97,7 @@ impl Worker {
                     }
                 }
             })
-            .expect("işçi iş parçacığı başlatılamadı");
+            .expect("could not start the worker thread");
 
         Self { tx: cmd_tx, rx: ev_rx, cancel, handle: Some(handle) }
     }
@@ -174,12 +174,12 @@ fn handle_command(command: Command, emitter: &Emitter, cancel: &AtomicBool) {
                 emitter.send(Event::BackupDone(Box::new(report)));
             }
             Command::PlanRestore { settings, target_home } => {
-                emitter.send(Event::Stage("Geri yükleme planı çıkarılıyor".into()));
+                emitter.send(Event::Stage("Building restore plan".into()));
                 let plan = restore::plan(&settings, &target_home)?;
                 emitter.send(Event::RestorePlanReady(Box::new(plan)));
             }
             Command::ApplyRestore { plan, make_rollback } => {
-                emitter.send(Event::Stage("Dosyalar geri yükleniyor".into()));
+                emitter.send(Event::Stage("Restoring files".into()));
                 let report = restore::apply(&plan, make_rollback, |path, index, total| {
                     if index % 10 == 0 || index == total {
                         emitter.send(Event::FileProgress {
@@ -193,14 +193,14 @@ fn handle_command(command: Command, emitter: &Emitter, cancel: &AtomicBool) {
                 emitter.send(Event::RestoreDone(Box::new(report)));
             }
             Command::Push(settings) => {
-                emitter.send(Event::Stage("Uzak depoya gönderiliyor".into()));
+                emitter.send(Event::Stage("Pushing to the remote".into()));
                 let repo = gitrepo::open_or_init(&settings.repo_path, &settings.branch)?;
                 gitrepo::set_remote(&repo, &settings.remote_url)?;
                 gitrepo::push(&repo, &settings.branch)?;
                 emitter.send(Event::Pushed);
             }
             Command::Pull(settings) => {
-                emitter.send(Event::Stage("Uzak depodan çekiliyor".into()));
+                emitter.send(Event::Stage("Fetching from the remote".into()));
                 let repo = gitrepo::open_or_init(&settings.repo_path, &settings.branch)?;
                 gitrepo::set_remote(&repo, &settings.remote_url)?;
                 let outcome = gitrepo::pull_fast_forward(&repo, &settings.branch)?;
@@ -212,7 +212,7 @@ fn handle_command(command: Command, emitter: &Emitter, cancel: &AtomicBool) {
                 emitter.send(Event::History(commits));
             }
             Command::Discover { home } => {
-                emitter.send(Event::Stage("~/.config inceleniyor".into()));
+                emitter.send(Event::Stage("Inspecting ~/.config".into()));
                 let mut index = 0usize;
                 let candidates = discover::config_candidates(&home, |path| {
                     index += 1;

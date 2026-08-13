@@ -103,9 +103,9 @@ impl Settings {
             return Ok(Self::default());
         }
         let raw = std::fs::read_to_string(&path)
-            .with_context(|| format!("ayar dosyası okunamadı: {}", path.display()))?;
+            .with_context(|| format!("could not read settings file: {}", path.display()))?;
         let settings: Settings = toml::from_str(&raw)
-            .with_context(|| format!("ayar dosyası ayrıştırılamadı: {}", path.display()))?;
+            .with_context(|| format!("could not parse settings file: {}", path.display()))?;
         Ok(settings)
     }
 
@@ -116,7 +116,7 @@ impl Settings {
         }
         let raw = toml::to_string_pretty(self)?;
         std::fs::write(&path, raw)
-            .with_context(|| format!("ayar dosyası yazılamadı: {}", path.display()))?;
+            .with_context(|| format!("could not write settings file: {}", path.display()))?;
         Ok(())
     }
 
@@ -207,7 +207,7 @@ fn default_sources(home: &Path) -> Vec<Source> {
 /// gitignore sözdizimi: `!` ile başlayanlar istisnadır.
 pub fn default_excludes() -> Vec<String> {
     [
-        "# --- önbellek ve geçici dosyalar ---",
+        "# --- caches and temporary files ---",
         "**/[Cc]ache/**",
         "**/cache2/**",
         "**/.cache/**",
@@ -219,14 +219,14 @@ pub fn default_excludes() -> Vec<String> {
         "**/lock",
         "**/*.socket",
         "**/*.sock",
-        "# --- oturum ve durum verisi ---",
+        "# --- session and state data ---",
         "**/Session Storage/**",
         "**/Local Storage/**",
         "**/IndexedDB/**",
         "**/Service Worker/**",
         "**/GPUCache/**",
         "**/Code Cache/**",
-        "# --- gizli anahtarlar (varsayılan olarak dışarıda) ---",
+        "# --- secrets (excluded by default) ---",
         "**/.ssh/id_*",
         "!**/.ssh/id_*.pub",
         "**/*.pem",
@@ -239,7 +239,7 @@ pub fn default_excludes() -> Vec<String> {
         "**/.docker/config.json",
         "**/.npmrc",
         "**/.pypirc",
-        "# --- büyük/anlamsız içerik ---",
+        "# --- large or meaningless content ---",
         "**/node_modules/**",
         "**/__pycache__/**",
         // `.git`'in kendisi de elenir: submodule'lerde bu bir dosyadır ve
@@ -248,7 +248,7 @@ pub fn default_excludes() -> Vec<String> {
         "**/.git",
         "**/.git/**",
         "**/Trash/**",
-        "# --- uygulama durumu (yapılandırma değil) ---",
+        "# --- application state (not configuration) ---",
         // Kaynak olarak yanlışlıkla `~/.config` eklenirse ağır olanlar
         // yine de taramaya girmesin diye ikinci bir güvenlik ağı.
         "**/.config/BraveSoftware/**",

@@ -1,24 +1,24 @@
-# pacman kurulum/kaldırma iletileri.
+# pacman install/upgrade/removal messages.
 #
-# Ajan paketle birlikte "vendor enabled" gelir: etkinleştirme bağlantısı
-# /usr/lib/systemd/user/graphical-session.target.wants/ altındadır, yani
-# kullanıcının `systemctl --user enable` çalıştırmasına gerek yoktur.
-# Kök olarak çalışan pacman, kullanıcının oturumundaki systemd örneğini
-# başlatamayacağı için "şimdi başlat" adımı kullanıcıya bırakılır.
+# The agent ships "vendor enabled": the enablement symlink lives in
+# /usr/lib/systemd/user/graphical-session.target.wants/, so the user does not
+# need to run `systemctl --user enable`. pacman runs as root and cannot reach
+# the user's systemd instance, so starting it now is left to the user.
 
 post_install() {
     cat <<'MSG'
 
-  confsync kuruldu.
+  confsync installed.
 
-    Arayüz : uygulama menüsünde "confsync" (ya da terminalde: confsync)
-    Ajan   : tray ikonu; grafik oturum açıldığında kendiliğinden başlar
+    App   : "confsync" in your application menu (or run: confsync)
+    Agent : tray icon; starts automatically with the graphical session
 
-  Oturumu yeniden açmadan ajanı şimdi başlatmak için:
+  To start the agent now, without re-opening your session:
 
       systemctl --user start confsync-agent.service
 
-  Ajanı istemiyorsanız (etkinleştirme paketten geldiği için "disable" değil):
+  If you do not want the agent (use "mask", not "disable", because the
+  enablement comes from the package):
 
       systemctl --user mask confsync-agent.service
 
@@ -28,7 +28,7 @@ MSG
 post_upgrade() {
     cat <<'MSG'
 
-  confsync güncellendi. Çalışan ajanın yeni sürüme geçmesi için:
+  confsync upgraded. To move the running agent to the new version:
 
       systemctl --user restart confsync-agent.service
 
@@ -38,7 +38,7 @@ MSG
 pre_remove() {
     cat <<'MSG'
 
-  Ajanı durdurmak için (paket kaldırıldıktan sonra birim dosyası da gider):
+  To stop the agent (the unit file goes away with the package):
 
       systemctl --user stop confsync-agent.service
 
@@ -48,7 +48,7 @@ MSG
 post_remove() {
     cat <<'MSG'
 
-  Ayarlarınız ve yedek deponuz silinmedi:
+  Your settings and backup repository were left in place:
 
       ~/.config/confsync/settings.toml
       ~/.local/share/confsync/

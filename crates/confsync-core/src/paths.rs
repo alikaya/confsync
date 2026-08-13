@@ -22,7 +22,7 @@ pub const ROOT_PREFIX: &str = "root";
 /// Mutlak yolu depo içi göreli yola çevirir.
 pub fn to_repo_rel(abs: &Path, home: &Path) -> Result<PathBuf> {
     if !abs.is_absolute() {
-        return Err(anyhow!("mutlak yol bekleniyordu: {}", abs.display()));
+        return Err(anyhow!("expected an absolute path: {}", abs.display()));
     }
     if let Ok(rest) = abs.strip_prefix(home) {
         return Ok(Path::new(HOME_PREFIX).join(rest));
@@ -36,13 +36,13 @@ pub fn from_repo_rel(rel: &Path, home: &Path) -> Result<PathBuf> {
     let mut comps = rel.components();
     let first = comps
         .next()
-        .ok_or_else(|| anyhow!("boş depo yolu"))?;
+        .ok_or_else(|| anyhow!("empty repository path"))?;
     let rest: PathBuf = comps.as_path().to_path_buf();
     match first {
         Component::Normal(p) if p == HOME_PREFIX => Ok(home.join(rest)),
         Component::Normal(p) if p == ROOT_PREFIX => Ok(Path::new("/").join(rest)),
         other => Err(anyhow!(
-            "bilinmeyen depo yolu öneki: {:?}",
+            "unknown repository path prefix: {:?}",
             other.as_os_str()
         )),
     }

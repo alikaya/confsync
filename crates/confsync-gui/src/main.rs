@@ -10,7 +10,7 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1040.0, 720.0])
             .with_min_inner_size([820.0, 560.0])
-            .with_title("confsync — yapılandırma yedekleyici"),
+            .with_title("confsync — configuration backup"),
         ..Default::default()
     };
 

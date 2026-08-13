@@ -23,11 +23,11 @@ pub fn header(app: &mut App, ui: &mut egui::Ui) {
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if app.busy {
-                if ui.add(theme::danger_button("İptal")).clicked() {
+                if ui.add(theme::danger_button("Cancel")).clicked() {
                     app.worker.cancel();
                 }
             } else if ui
-                .add(theme::primary_button("Şimdi Yedekle").min_size(egui::vec2(126.0, 30.0)))
+                .add(theme::primary_button("Back Up Now").min_size(egui::vec2(126.0, 30.0)))
                 .clicked()
             {
                 app.start_backup();
@@ -85,7 +85,7 @@ pub fn status_bar(app: &mut App, ui: &mut egui::Ui) {
                             .animate(true),
                     );
                     ui.label(
-                        egui::RichText::new(format!("{index} dosya"))
+                        egui::RichText::new(format!("{index} files"))
                             .size(12.0)
                             .color(theme::MUTED),
                     );
@@ -102,7 +102,7 @@ pub fn status_bar(app: &mut App, ui: &mut egui::Ui) {
                 .log
                 .last()
                 .map(|(level, msg)| (*level, msg.clone()))
-                .unwrap_or((LogLevel::Info, "Hazır".into()));
+                .unwrap_or((LogLevel::Info, "Ready".into()));
             theme::dot(ui, level_color(level));
             ui.label(egui::RichText::new(msg).size(12.5).color(theme::MUTED));
         }
@@ -134,9 +134,9 @@ pub fn review_window(app: &mut App, ctx: &egui::Context) {
     let mut cancel = false;
     // Pencere içeriği `app.review`'i ödünç alacağı için plan geçici olarak
     // dışarı alınır; kararlar üzerinde doğrudan çalışılır.
-    let mut plan = app.review.take().expect("yukarıda kontrol edildi");
+    let mut plan = app.review.take().expect("checked above");
 
-    egui::Window::new("Yedeklemeden önce onay")
+    egui::Window::new("Review before backing up")
         .collapsible(false)
         .resizable(true)
         .default_width(720.0)
@@ -167,7 +167,7 @@ pub fn review_window(app: &mut App, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 theme::badge(
                     ui,
-                    &format!("{} dosya alınacak", plan.included_count()),
+                    &format!("{} files included", plan.included_count()),
                     theme::SUCCESS,
                 );
                 theme::badge(
@@ -178,14 +178,14 @@ pub fn review_window(app: &mut App, ctx: &egui::Context) {
                 if !questions.is_empty() {
                     theme::badge(
                         ui,
-                        &format!("{} karar bekliyor", questions.len()),
+                        &format!("{} need a decision", questions.len()),
                         theme::WARN,
                     );
                 }
                 if !plan.skipped.is_empty() {
                     theme::badge(
                         ui,
-                        &format!("{} elendi", plan.skipped.len()),
+                        &format!("{} filtered out", plan.skipped.len()),
                         theme::FAINT,
                     );
                 }
@@ -215,18 +215,18 @@ pub fn review_window(app: &mut App, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.checkbox(
                     &mut app.remember_decisions,
-                    "Bu kararları hatırla (bir daha sorma)",
+                    "Remember these decisions (don't ask again)",
                 )
                 .on_hover_text(
-                    "Kararlar ayarlara yazılır; aynı dosyalar sonraki \
-                     yedeklemelerde sorulmadan uygulanır.",
+                    "Decisions are saved to settings; the same files are applied \
+                     without asking on later backups.",
                 );
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui
                         .add(
                             theme::primary_button(&format!(
-                                "{} dosyayı yedekle",
+                                "Back up {} files",
                                 plan.included_count()
                             ))
                             .min_size(egui::vec2(160.0, 30.0)),
@@ -235,7 +235,7 @@ pub fn review_window(app: &mut App, ctx: &egui::Context) {
                     {
                         start = true;
                     }
-                    if ui.add(theme::ghost_button("Vazgeç")).clicked() {
+                    if ui.add(theme::ghost_button("Cancel")).clicked() {
                         cancel = true;
                     }
                 });
@@ -258,24 +258,24 @@ fn questions_section(
 ) {
     theme::notice(ui, theme::WARN, |ui| {
         ui.label(
-            egui::RichText::new("Bu dosyalar için kararınız gerekiyor")
+            egui::RichText::new("These files need your decision")
                 .size(13.5)
                 .color(theme::WARN),
         );
         ui.label(
             egui::RichText::new(
-                "Sır içerdiği düşünülen dosyalar işaretlenirse depoya —uzak depo \
-                 tanımlıysa oraya da— olduğu gibi gider. Emin değilseniz dışarıda bırakın.",
+                "Files suspected of holding secrets go into the repository as-is —and to \
+                 the remote, if one is configured. Leave them out if unsure.",
             )
             .size(12.5)
             .color(theme::MUTED),
         );
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            if ui.add(theme::ghost_button("Hepsini al")).clicked() {
+            if ui.add(theme::ghost_button("Include all")).clicked() {
                 plan.set_all_questions(true);
             }
-            if ui.add(theme::ghost_button("Hiçbirini alma")).clicked() {
+            if ui.add(theme::ghost_button("Include none")).clicked() {
                 plan.set_all_questions(false);
             }
         });
@@ -313,9 +313,9 @@ fn questions_section(
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if entry.include {
-                        theme::badge(ui, "yedeğe girecek", theme::SUCCESS);
+                        theme::badge(ui, "will be backed up", theme::SUCCESS);
                     } else {
-                        theme::badge(ui, "atlanacak", theme::MUTED);
+                        theme::badge(ui, "will be skipped", theme::MUTED);
                     }
                 });
             });
@@ -338,14 +338,14 @@ fn included_section(
         .map(|(i, _)| i)
         .collect();
 
-    let label = format!("Sorusuz alınacaklar ({})", plain.len());
+    let label = format!("Included without questions ({})", plain.len());
     let header = egui::CollapsingHeader::new(
         egui::RichText::new(label).size(13.0).color(theme::MUTED),
     )
     .open(Some(app.show_included))
     .show(ui, |ui| {
         ui.label(
-            egui::RichText::new("İşareti kaldırılan dosya bu yedeğe girmez.")
+            egui::RichText::new("Unchecked files are left out of this backup.")
                 .size(12.0)
                 .color(theme::FAINT),
         );
@@ -395,15 +395,15 @@ fn skipped_section(
     home: &std::path::Path,
 ) {
     egui::CollapsingHeader::new(
-        egui::RichText::new(format!("Kalıp/teknik nedenle elenenler ({})", plan.skipped.len()))
+        egui::RichText::new(format!("Filtered out by pattern or technical reason ({})", plan.skipped.len()))
             .size(13.0)
             .color(theme::MUTED),
     )
     .show(ui, |ui| {
         ui.label(
             egui::RichText::new(
-                "Bunlar karar dışıdır: hariç tutma kalıpları, okunamayan dosyalar \
-                 ve iç içe git depoları.",
+                "These are not up for decision: exclude patterns, unreadable files \
+                 and nested git repositories.",
             )
             .size(12.0)
             .color(theme::FAINT),
@@ -437,8 +437,8 @@ pub fn overview(app: &mut App, ui: &mut egui::Ui) {
 
     theme::title(
         ui,
-        "Genel Bakış",
-        "Deponun durumu ve son yedekleme işleminin özeti.",
+        "Overview",
+        "Repository status and a summary of the last backup.",
     );
 
     // Toplamlar için gereken ölçümler (arka planda, tekrarsız).
@@ -471,7 +471,7 @@ pub fn overview(app: &mut App, ui: &mut egui::Ui) {
     let tiles: [(String, &str, egui::Color32); 5] = [
         (
             format!("{enabled}/{}", app.settings.sources.len()),
-            "etkin kaynak",
+            "enabled sources",
             theme::TEXT,
         ),
         (
@@ -480,19 +480,19 @@ pub fn overview(app: &mut App, ui: &mut egui::Ui) {
                 if complete { "" } else { "≈" },
                 human_bytes(sources_total)
             ),
-            "kaynak toplamı",
+            "source total",
             theme::TEXT,
         ),
         (
             repo_size.map(human_bytes).unwrap_or_else(|| "…".into()),
-            "depo boyutu",
+            "repository size",
             theme::ACCENT_HOVER,
         ),
-        (patterns.to_string(), "hariç tutma kalıbı", theme::TEXT),
+        (patterns.to_string(), "exclude patterns", theme::TEXT),
         match &app.last_backup {
             Some(report) => (
                 report.stored.to_string(),
-                "son yedekte dosya",
+                "files in last backup",
                 theme::SUCCESS,
             ),
             None => (app.history.len().to_string(), "commit", theme::TEXT),
@@ -514,19 +514,19 @@ pub fn overview(app: &mut App, ui: &mut egui::Ui) {
 
     theme::card().show(ui, |ui| {
         ui.set_width(ui.available_width());
-        theme::caption(ui, "DEPO");
+        theme::caption(ui, "REPOSITORY");
         ui.add_space(6.0);
-        info_row(ui, "Yerel", &app.settings.repo_path.display().to_string());
+        info_row(ui, "Local", &app.settings.repo_path.display().to_string());
         info_row(
             ui,
-            "Uzak",
+            "Remote",
             if app.settings.remote_url.trim().is_empty() {
-                "tanımlı değil (yalnızca yerel)"
+                "not configured (local only)"
             } else {
                 &app.settings.remote_url
             },
         );
-        info_row(ui, "Dal", &app.settings.branch);
+        info_row(ui, "Branch", &app.settings.branch);
     });
 
     if let Some(report) = &app.last_backup {
@@ -553,11 +553,11 @@ pub fn overview(app: &mut App, ui: &mut egui::Ui) {
 
         theme::card().show(ui, |ui| {
             ui.set_width(ui.available_width());
-            theme::caption(ui, "SON YEDEK");
+            theme::caption(ui, "LAST BACKUP");
             ui.add_space(6.0);
             ui.label(
                 egui::RichText::new(format!(
-                    "{} dosya saklandı · {} atlandı · {}",
+                    "{} files stored · {} skipped · {}",
                     report.stored,
                     report.skipped,
                     human_bytes(report.bytes)
@@ -568,7 +568,7 @@ pub fn overview(app: &mut App, ui: &mut egui::Ui) {
             if !skipped.is_empty() {
                 ui.add_space(8.0);
                 egui::CollapsingHeader::new(
-                    egui::RichText::new(format!("Atlanan dosyalar ({})", skipped.len()))
+                    egui::RichText::new(format!("Skipped files ({})", skipped.len()))
                         .size(13.0)
                         .color(theme::MUTED),
                 )
@@ -594,7 +594,7 @@ pub fn overview(app: &mut App, ui: &mut egui::Ui) {
     ui.add_space(12.0);
     theme::card().show(ui, |ui| {
         ui.set_width(ui.available_width());
-        theme::caption(ui, "GÜNLÜK");
+        theme::caption(ui, "LOG");
         ui.add_space(6.0);
         egui::ScrollArea::vertical()
             .max_height(180.0)
@@ -627,7 +627,7 @@ fn progress_card(app: &App, ui: &mut egui::Ui) {
             ui.spinner();
             ui.label(
                 egui::RichText::new(if app.stage.is_empty() {
-                    "Çalışıyor"
+                    "Working"
                 } else {
                     &app.stage
                 })
@@ -643,7 +643,7 @@ fn progress_card(app: &App, ui: &mut egui::Ui) {
                     ),
                     // Tarama aşamasında toplam bilinmediği için yüzde yok.
                     None => ui.label(
-                        egui::RichText::new("hazırlanıyor")
+                        egui::RichText::new("preparing")
                             .size(12.5)
                             .color(theme::MUTED),
                     ),
@@ -672,9 +672,9 @@ fn progress_card(app: &App, ui: &mut egui::Ui) {
             if let Some((index, total)) = app.progress {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let text = if total > 0 {
-                        format!("{index} / {total} dosya")
+                        format!("{index} / {total} files")
                     } else {
-                        format!("{index} dosya tarandı")
+                        format!("{index} files scanned")
                     };
                     ui.label(egui::RichText::new(text).size(12.0).color(theme::MUTED));
                 });
@@ -696,16 +696,16 @@ fn changes_table(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
         ui.horizontal(|ui| {
             let title = match &app.changes {
                 Some(report) if !report.is_empty() => {
-                    format!("DEĞİŞENLER ({})", report.total())
+                    format!("CHANGES ({})", report.total())
                 }
-                _ => "DEĞİŞENLER".to_string(),
+                _ => "CHANGES".to_string(),
             };
             theme::caption(ui, &title);
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
-                    .add_enabled(!app.detecting, theme::ghost_button("Yenile"))
-                    .on_hover_text("Kaynakları son yedekle yeniden karşılaştırır")
+                    .add_enabled(!app.detecting, theme::ghost_button("Refresh"))
+                    .on_hover_text("Compare sources against the last backup again")
                     .clicked()
                 {
                     app.start_detect_changes();
@@ -713,7 +713,7 @@ fn changes_table(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
                 if app.detecting {
                     ui.spinner();
                     ui.label(
-                        egui::RichText::new("karşılaştırılıyor…")
+                        egui::RichText::new("comparing…")
                             .size(12.0)
                             .color(theme::MUTED),
                     );
@@ -725,7 +725,7 @@ fn changes_table(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
 
         let Some(report) = &app.changes else {
             ui.label(
-                egui::RichText::new("Karşılaştırma henüz yapılmadı.")
+                egui::RichText::new("No comparison yet.")
                     .size(12.5)
                     .color(theme::FAINT),
             );
@@ -736,7 +736,7 @@ fn changes_table(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
             ui.horizontal(|ui| {
                 theme::dot(ui, theme::SUCCESS);
                 ui.label(
-                    egui::RichText::new("Kaynaklar son yedekle aynı.")
+                    egui::RichText::new("Sources match the last backup.")
                         .size(13.0)
                         .color(theme::MUTED),
                 );
@@ -755,7 +755,7 @@ fn changes_table(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
             if report.questions > 0 {
                 theme::badge(
                     ui,
-                    &format!("{} karar bekliyor", report.questions),
+                    &format!("{} need a decision", report.questions),
                     theme::WARN,
                 );
             }
@@ -767,11 +767,11 @@ fn changes_table(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
         ui.horizontal(|ui| {
             ui.add_sized(
                 [88.0, 16.0],
-                egui::Label::new(egui::RichText::new("DURUM").size(11.0).color(theme::FAINT)),
+                egui::Label::new(egui::RichText::new("STATUS").size(11.0).color(theme::FAINT)),
             );
-            ui.label(egui::RichText::new("DOSYA").size(11.0).color(theme::FAINT));
+            ui.label(egui::RichText::new("FILE").size(11.0).color(theme::FAINT));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(egui::RichText::new("BOYUT").size(11.0).color(theme::FAINT));
+                ui.label(egui::RichText::new("SIZE").size(11.0).color(theme::FAINT));
             });
         });
         theme::hairline(ui);
@@ -848,8 +848,8 @@ pub fn sources(app: &mut App, ui: &mut egui::Ui) {
 
     theme::title(
         ui,
-        "Yedeklenecek Kaynaklar",
-        "Yalnızca yapılandırma dosyalarını taşıyın; uygulama verisi yedeğe girmesin.",
+        "Sources to Back Up",
+        "Carry only configuration files; keep application data out of the backup.",
     );
 
     // Eski ayarlardan gelen "~/.config'in tamamı" kaynağı gerçek bir tuzak:
@@ -862,15 +862,15 @@ pub fn sources(app: &mut App, ui: &mut egui::Ui) {
     if let Some(index) = broad {
         theme::notice(ui, theme::WARN, |ui| {
             ui.label(
-                egui::RichText::new("~/.config bütün olarak ekli")
+                egui::RichText::new("~/.config is added as a whole")
                     .size(13.5)
                     .color(theme::WARN),
             );
             ui.label(
                 egui::RichText::new(
-                    "Bu klasörde tarayıcı profilleri ve uygulama durum dosyaları da bulunur; \
-                     yedek gereksiz yere büyür. Aşağıdaki keşif paneliyle yalnızca gerçek \
-                     yapılandırma klasörlerini seçebilirsiniz.",
+                    "That folder also holds browser profiles and application state, which \
+                     bloats the backup. Use the discovery panel below to pick only the \
+                     real configuration folders.",
                 )
                 .size(12.5)
                 .color(theme::MUTED),
@@ -878,7 +878,7 @@ pub fn sources(app: &mut App, ui: &mut egui::Ui) {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 if ui
-                    .add(theme::primary_button("Bunun yerine önerilenleri kullan"))
+                    .add(theme::primary_button("Use the recommended set instead"))
                     .clicked()
                 {
                     app.settings.sources.remove(index);
@@ -890,14 +890,14 @@ pub fn sources(app: &mut App, ui: &mut egui::Ui) {
                     }
                     app.settings_dirty = true;
                     app.info(format!(
-                        "~/.config kaynak listesinden çıkarıldı; {added} bilinen \
-                         yapılandırma girdisi eklendi."
+                        "~/.config removed from the source list; {added} known configuration \
+                         entries added."
                     ));
                 }
-                if ui.add(theme::ghost_button("Olduğu gibi bırak")).clicked() {
+                if ui.add(theme::ghost_button("Leave as is")).clicked() {
                     app.warn(
-                        "~/.config bütün olarak taranmaya devam edecek. \
-                         Hariç tutma kalıpları ağır klasörleri yine de eleyecektir.",
+                        "~/.config will keep being scanned as a whole. Exclude patterns will \
+                         still filter out the heavy folders.",
                     );
                 }
             });
@@ -915,17 +915,17 @@ pub fn sources(app: &mut App, ui: &mut egui::Ui) {
             );
             let submitted = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
 
-            if ui.add(theme::primary_button("Ekle")).clicked() || submitted {
+            if ui.add(theme::primary_button("Add")).clicked() || submitted {
                 let raw = app.new_source_input.clone();
                 add_source(app, paths::expand_tilde(&raw, &home));
                 app.new_source_input.clear();
             }
-            if ui.add(theme::ghost_button("Klasör seç…")).clicked() {
+            if ui.add(theme::ghost_button("Choose folder…")).clicked() {
                 if let Some(dir) = rfd::FileDialog::new().set_directory(&home).pick_folder() {
                     add_source(app, dir);
                 }
             }
-            if ui.add(theme::ghost_button("Dosya seç…")).clicked() {
+            if ui.add(theme::ghost_button("Choose file…")).clicked() {
                 if let Some(file) = rfd::FileDialog::new().set_directory(&home).pick_file() {
                     add_source(app, file);
                 }
@@ -954,11 +954,11 @@ pub fn sources(app: &mut App, ui: &mut egui::Ui) {
     theme::card().show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
-            theme::caption(ui, &format!("LİSTE ({})", app.settings.sources.len()));
+            theme::caption(ui, &format!("LIST ({})", app.settings.sources.len()));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
-                    .add(theme::ghost_button("Boyutları yenile"))
-                    .on_hover_text("Diskteki güncel boyutları yeniden ölçer")
+                    .add(theme::ghost_button("Refresh sizes"))
+                    .on_hover_text("Measures current on-disk sizes again")
                     .clicked()
                 {
                     for path in &source_paths {
@@ -971,7 +971,7 @@ pub fn sources(app: &mut App, ui: &mut egui::Ui) {
 
         if app.settings.sources.is_empty() {
             ui.label(
-                egui::RichText::new("Henüz kaynak yok.")
+                egui::RichText::new("No sources yet.")
                     .size(13.0)
                     .color(theme::FAINT),
             );
@@ -1000,13 +1000,13 @@ pub fn sources(app: &mut App, ui: &mut egui::Ui) {
                                 },
                             ));
                             if !exists {
-                                theme::badge(ui, "bulunamadı", theme::DANGER);
+                                theme::badge(ui, "not found", theme::DANGER);
                             }
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
                                     if theme::close_button(ui)
-                                        .on_hover_text("Listeden çıkar")
+                                        .on_hover_text("Remove from list")
                                         .clicked()
                                     {
                                         remove = Some(index);
@@ -1017,7 +1017,7 @@ pub fn sources(app: &mut App, ui: &mut egui::Ui) {
                                             .color(theme::MUTED),
                                     )
                                     .on_hover_text(
-                                        "Diskteki boyut (hariç tutma kalıpları uygulanmadan)",
+                                        "On-disk size (exclude patterns not applied)",
                                     );
                                 },
                             );
@@ -1052,12 +1052,12 @@ fn discovery_panel(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
     theme::card().show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
-            theme::caption(ui, "~/.CONFIG KEŞFİ");
+            theme::caption(ui, "~/.CONFIG DISCOVERY");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let label = if discovery.is_empty() {
-                    "İncele"
+                    "Inspect"
                 } else {
-                    "Yeniden incele"
+                    "Inspect again"
                 };
                 if ui
                     .add_enabled(!app.busy, theme::ghost_button(label))
@@ -1066,7 +1066,7 @@ fn discovery_panel(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
                     app.start_discovery();
                 }
                 if !discovery.is_empty() {
-                    ui.checkbox(&mut app.show_heavy, "ağırları da göster");
+                    ui.checkbox(&mut app.show_heavy, "show heavy ones too");
                 }
             });
         });
@@ -1076,9 +1076,9 @@ fn discovery_panel(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
         if discovery.is_empty() {
             ui.label(
                 egui::RichText::new(
-                    "~/.config içindeki her girdinin boyutunu ölçüp hangilerinin gerçek \
-                     yapılandırma olduğunu ayırır. Tarayıcı profilleri gibi ağır klasörler \
-                     işaretlenir, önerilenleri tek tıkla ekleyebilirsiniz.",
+                    "Measures every entry under ~/.config and separates real configuration \
+                     from the rest. Heavy folders such as browser profiles are flagged; \
+                     you can add the recommended ones in one click.",
                 )
                 .size(12.5)
                 .color(theme::MUTED),
@@ -1097,14 +1097,14 @@ fn discovery_panel(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new(format!(
-                        "{} önerilen girdi henüz listede değil.",
+                        "{} recommended entries are not on the list yet.",
                         recommended.len()
                     ))
                     .size(12.5)
                     .color(theme::MUTED),
                 );
                 if ui
-                    .add(theme::primary_button("Önerilenlerin hepsini ekle"))
+                    .add(theme::primary_button("Add all recommended"))
                     .clicked()
                 {
                     to_add.extend(recommended.iter().map(|c| c.path.clone()));
@@ -1141,7 +1141,7 @@ fn discovery_panel(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
                             );
                             ui.label(
                                 egui::RichText::new(format!(
-                                    "{}{} · {} dosya · {}",
+                                    "{}{} · {} files · {}",
                                     if candidate.truncated { "≥" } else { "" },
                                     human_bytes(candidate.size),
                                     candidate.files,
@@ -1156,12 +1156,12 @@ fn discovery_panel(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
                                 |ui| {
                                     if already {
                                         ui.label(
-                                            egui::RichText::new("listede")
+                                            egui::RichText::new("on the list")
                                                 .size(12.0)
                                                 .color(theme::SUCCESS),
                                         );
                                     } else if ui
-                                        .add(theme::ghost_button("Ekle"))
+                                        .add(theme::ghost_button("Add"))
                                         .clicked()
                                     {
                                         to_add.push(candidate.path.clone());
@@ -1180,7 +1180,7 @@ fn discovery_panel(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
     for path in to_add {
         if app.settings.add_source(path.clone()) {
             app.settings_dirty = true;
-            app.info(format!("Eklendi: {}", paths::display_short(&path, home)));
+            app.info(format!("Added: {}", paths::display_short(&path, home)));
         }
     }
 }
@@ -1200,24 +1200,24 @@ fn add_source(app: &mut App, path: PathBuf) {
     }
     if paths::is_too_broad(&path, &home) {
         app.warn(format!(
-            "{} çok geniş bir kapsam; alt klasörleri tek tek eklemeniz önerilir.",
+            "{} is a very broad scope; adding its subfolders one by one is recommended.",
             path.display()
         ));
     }
     if discover::is_whole_config_dir(&path, &home) {
         app.warn(
-            "~/.config'in tamamı ekleniyor: içinde tarayıcı profilleri ve uygulama \
-             verisi de var. Keşif paneliyle tek tek seçmek çok daha küçük bir yedek üretir.",
+            "Adding all of ~/.config: it also holds browser profiles and application \
+             data. Picking entries with the discovery panel yields a far smaller backup.",
         );
     }
     if !path.exists() {
-        app.warn(format!("{} şu an mevcut değil, yine de eklendi.", path.display()));
+        app.warn(format!("{} does not exist right now; added anyway.", path.display()));
     }
     if app.settings.add_source(path.clone()) {
         app.settings_dirty = true;
-        app.info(format!("Eklendi: {}", paths::display_short(&path, &home)));
+        app.info(format!("Added: {}", paths::display_short(&path, &home)));
     } else {
-        app.warn("Bu yol zaten listede.");
+        app.warn("That path is already on the list.");
     }
 }
 
@@ -1226,8 +1226,8 @@ fn add_source(app: &mut App, path: PathBuf) {
 pub fn excludes(app: &mut App, ui: &mut egui::Ui) {
     theme::title(
         ui,
-        "Hariç Tutma Kalıpları",
-        "gitignore sözdizimi geçerlidir: `#` yorum, `!` istisna tanımlar.",
+        "Exclude Patterns",
+        "gitignore syntax applies: `#` is a comment, `!` defines an exception.",
     );
 
     let mut changed = false;
@@ -1250,12 +1250,12 @@ pub fn excludes(app: &mut App, ui: &mut egui::Ui) {
 
     ui.add_space(10.0);
     ui.horizontal(|ui| {
-        if ui.add(theme::ghost_button("Varsayılanları geri getir")).clicked() {
+        if ui.add(theme::ghost_button("Restore defaults")).clicked() {
             app.excludes_text = settings::default_excludes().join("\n");
             app.sync_excludes_from_text();
-            app.info("Varsayılan hariç tutma listesi yüklendi.");
+            app.info("Default exclude list loaded.");
         }
-        if ui.add(theme::ghost_button("Eksik varsayılanları ekle")).clicked() {
+        if ui.add(theme::ghost_button("Add missing defaults")).clicked() {
             let mut lines: Vec<String> = app.excludes_text.lines().map(String::from).collect();
             let mut added = 0;
             for pattern in settings::default_excludes() {
@@ -1266,7 +1266,7 @@ pub fn excludes(app: &mut App, ui: &mut egui::Ui) {
             }
             app.excludes_text = lines.join("\n");
             app.sync_excludes_from_text();
-            app.info(format!("{added} kalıp eklendi."));
+            app.info(format!("{added} patterns added."));
         }
     });
 
@@ -1279,8 +1279,8 @@ pub fn excludes(app: &mut App, ui: &mut egui::Ui) {
 pub fn restore(app: &mut App, ui: &mut egui::Ui) {
     theme::title(
         ui,
-        "Geri Yükle",
-        "Önce kuru çalışma yapılır; hiçbir dosya siz onaylamadan değişmez.",
+        "Restore",
+        "A dry run comes first; nothing changes until you confirm.",
     );
 
     let profiles = restore::available_profiles(&app.settings.repo_path);
@@ -1288,7 +1288,7 @@ pub fn restore(app: &mut App, ui: &mut egui::Ui) {
     theme::card().show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("Profil").size(13.0).color(theme::MUTED));
+            ui.label(egui::RichText::new("Profile").size(13.0).color(theme::MUTED));
             egui::ComboBox::from_id_salt("profil_secimi")
                 .selected_text(app.settings.profile.clone())
                 .show_ui(ui, |ui| {
@@ -1299,7 +1299,7 @@ pub fn restore(app: &mut App, ui: &mut egui::Ui) {
 
             ui.add_space(12.0);
             ui.label(
-                egui::RichText::new("Hedef ev dizini")
+                egui::RichText::new("Target home directory")
                     .size(13.0)
                     .color(theme::MUTED),
             );
@@ -1315,12 +1315,12 @@ pub fn restore(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(10.0);
         ui.horizontal(|ui| {
             if ui
-                .add_enabled(!app.busy, theme::primary_button("Planı çıkar (kuru çalışma)"))
+                .add_enabled(!app.busy, theme::primary_button("Build plan (dry run)"))
                 .clicked()
             {
                 app.start_plan_restore();
             }
-            ui.checkbox(&mut app.make_rollback, "Üzerine yazmadan önce yedek al");
+            ui.checkbox(&mut app.make_rollback, "Back up before overwriting");
         });
     });
 
@@ -1334,13 +1334,13 @@ pub fn restore(app: &mut App, ui: &mut egui::Ui) {
                 ui.label(egui::RichText::new("📥").size(28.0).color(theme::FAINT));
                 ui.add_space(8.0);
                 ui.label(
-                    egui::RichText::new("Henüz plan yok")
+                    egui::RichText::new("No plan yet")
                         .size(14.0)
                         .color(theme::MUTED),
                 );
                 ui.label(
                     egui::RichText::new(
-                        "Yukarıdaki düğme, depodaki içeriğin sisteminize ne yapacağını gösterir.",
+                        "The button above shows what the repository content would do to your system.",
                     )
                     .size(12.5)
                     .color(theme::FAINT),
@@ -1362,16 +1362,16 @@ pub fn restore(app: &mut App, ui: &mut egui::Ui) {
         theme::card().show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal_wrapped(|ui| {
-                plan_badge(ui, "oluşturulacak", plan.count(Action::Create), theme::SUCCESS);
-                plan_badge(ui, "üzerine yazılacak", plan.count(Action::Overwrite), theme::WARN);
-                plan_badge(ui, "değişmedi", plan.count(Action::Unchanged), theme::FAINT);
-                plan_badge(ui, "çakışma", plan.count(Action::Conflict), theme::DANGER);
+                plan_badge(ui, "to create", plan.count(Action::Create), theme::SUCCESS);
+                plan_badge(ui, "to overwrite", plan.count(Action::Overwrite), theme::WARN);
+                plan_badge(ui, "unchanged", plan.count(Action::Unchanged), theme::FAINT);
+                plan_badge(ui, "conflict", plan.count(Action::Conflict), theme::DANGER);
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.add(theme::ghost_button("Hiçbirini seçme")).clicked() {
+                    if ui.add(theme::ghost_button("Select none")).clicked() {
                         plan.select_all(false);
                     }
-                    if ui.add(theme::ghost_button("Tümünü seç")).clicked() {
+                    if ui.add(theme::ghost_button("Select all")).clicked() {
                         plan.select_all(true);
                     }
                 });
@@ -1382,7 +1382,7 @@ pub fn restore(app: &mut App, ui: &mut egui::Ui) {
                 theme::notice(ui, theme::WARN, |ui| {
                     ui.label(
                         egui::RichText::new(format!(
-                            "Yedek {} dizininden alınmış, {} dizinine yazılacak.",
+                            "Backup was taken from {}, and will be written to {}.",
                             plan.source_home,
                             target_home.display()
                         ))
@@ -1428,7 +1428,7 @@ pub fn restore(app: &mut App, ui: &mut egui::Ui) {
             if ui
                 .add_enabled(
                     selected > 0 && !busy,
-                    theme::primary_button(&format!("{selected} dosyayı geri yükle")),
+                    theme::primary_button(&format!("Restore {selected} files")),
                 )
                 .clicked()
             {
@@ -1438,17 +1438,17 @@ pub fn restore(app: &mut App, ui: &mut egui::Ui) {
             theme::notice(ui, theme::DANGER, |ui| {
                 ui.label(
                     egui::RichText::new(format!(
-                        "{selected} dosyanın üzerine yazılacak. Emin misiniz?"
+                        "{selected} files will be overwritten. Are you sure?"
                     ))
                     .size(13.5)
                     .color(theme::DANGER),
                 );
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    if ui.add(theme::primary_button("Evet, geri yükle")).clicked() {
+                    if ui.add(theme::primary_button("Yes, restore")).clicked() {
                         apply_now = true;
                     }
-                    if ui.add(theme::ghost_button("Vazgeç")).clicked() {
+                    if ui.add(theme::ghost_button("Cancel")).clicked() {
                         confirm = false;
                     }
                 });
@@ -1478,9 +1478,9 @@ fn plan_badge(ui: &mut egui::Ui, label: &str, count: usize, color: egui::Color32
 
 pub fn history(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
-        theme::title(ui, "Geçmiş", "");
+        theme::title(ui, "History", "");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.add(theme::ghost_button("Yenile")).clicked() {
+            if ui.add(theme::ghost_button("Refresh")).clicked() {
                 app.worker.send(Command::LoadHistory(app.settings.clone()));
             }
         });
@@ -1492,12 +1492,12 @@ pub fn history(app: &mut App, ui: &mut egui::Ui) {
             ui.vertical_centered(|ui| {
                 ui.add_space(24.0);
                 ui.label(
-                    egui::RichText::new("Henüz commit yok")
+                    egui::RichText::new("No commits yet")
                         .size(14.0)
                         .color(theme::MUTED),
                 );
                 ui.label(
-                    egui::RichText::new("İlk yedeği aldığınızda burada listelenecek.")
+                    egui::RichText::new("They will appear here once you take the first backup.")
                         .size(12.5)
                         .color(theme::FAINT),
                 );
@@ -1541,20 +1541,20 @@ pub fn history(app: &mut App, ui: &mut egui::Ui) {
 // --- Ayarlar -------------------------------------------------------------
 
 pub fn settings(app: &mut App, ui: &mut egui::Ui) {
-    theme::title(ui, "Ayarlar", "Depo, uzak bağlantı ve tarama davranışı.");
+    theme::title(ui, "Settings", "Repository, remote connection and scan behaviour.");
 
     let mut changed = false;
 
     theme::card().show(ui, |ui| {
         ui.set_width(ui.available_width());
-        theme::caption(ui, "DEPO");
+        theme::caption(ui, "REPOSITORY");
         ui.add_space(8.0);
 
         egui::Grid::new("ayarlar")
             .num_columns(2)
             .spacing([16.0, 10.0])
             .show(ui, |ui| {
-                ui.label(egui::RichText::new("Yerel depo yolu").color(theme::MUTED));
+                ui.label(egui::RichText::new("Local repository path").color(theme::MUTED));
                 ui.horizontal(|ui| {
                     let mut text = app.settings.repo_path.display().to_string();
                     if ui
@@ -1573,7 +1573,7 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
                 });
                 ui.end_row();
 
-                ui.label(egui::RichText::new("Uzak depo (SSH/HTTPS)").color(theme::MUTED));
+                ui.label(egui::RichText::new("Remote repository (SSH/HTTPS)").color(theme::MUTED));
                 if ui
                     .add(
                         egui::TextEdit::singleline(&mut app.settings.remote_url)
@@ -1586,7 +1586,7 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
                 }
                 ui.end_row();
 
-                ui.label(egui::RichText::new("Dal").color(theme::MUTED));
+                ui.label(egui::RichText::new("Branch").color(theme::MUTED));
                 if ui
                     .add(egui::TextEdit::singleline(&mut app.settings.branch).desired_width(160.0))
                     .changed()
@@ -1595,7 +1595,7 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
                 }
                 ui.end_row();
 
-                ui.label(egui::RichText::new("Profil (makine adı)").color(theme::MUTED));
+                ui.label(egui::RichText::new("Profile (machine name)").color(theme::MUTED));
                 if ui
                     .add(egui::TextEdit::singleline(&mut app.settings.profile).desired_width(220.0))
                     .changed()
@@ -1604,7 +1604,7 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
                 }
                 ui.end_row();
 
-                ui.label(egui::RichText::new("Commit sahibi").color(theme::MUTED));
+                ui.label(egui::RichText::new("Commit author").color(theme::MUTED));
                 ui.horizontal(|ui| {
                     if ui
                         .add(
@@ -1633,11 +1633,11 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
 
     theme::card().show(ui, |ui| {
         ui.set_width(ui.available_width());
-        theme::caption(ui, "TARAMA");
+        theme::caption(ui, "SCANNING");
         ui.add_space(8.0);
 
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("Azami dosya boyutu").color(theme::MUTED));
+            ui.label(egui::RichText::new("Maximum file size").color(theme::MUTED));
             if ui
                 .add(egui::DragValue::new(&mut app.settings.max_file_size_mb).range(1..=512))
                 .changed()
@@ -1651,7 +1651,7 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
         if ui
             .checkbox(
                 &mut app.settings.skip_secrets,
-                "Sır içerdiği düşünülen dosyaları atla (önerilir)",
+                "Skip files suspected of holding secrets (recommended)",
             )
             .changed()
         {
@@ -1660,14 +1660,14 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
         if ui
             .checkbox(
                 &mut app.settings.follow_symlinks,
-                "Sembolik bağlantıların hedefini kopyala",
+                "Copy the target of symbolic links",
             )
             .changed()
         {
             changed = true;
         }
         if ui
-            .checkbox(&mut app.settings.auto_push, "Yedekten sonra otomatik push")
+            .checkbox(&mut app.settings.auto_push, "Push automatically after a backup")
             .changed()
         {
             changed = true;
@@ -1675,7 +1675,7 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
         if ui
             .checkbox(
                 &mut app.settings.always_ask,
-                "Sorulacak bir şey olmasa da yedekleme öncesi onay penceresini göster",
+                "Show the review window before backing up even when nothing needs a decision",
             )
             .changed()
         {
@@ -1687,13 +1687,13 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
 
     theme::card().show(ui, |ui| {
         ui.set_width(ui.available_width());
-        theme::caption(ui, "AJAN (TRAY)");
+        theme::caption(ui, "AGENT (TRAY)");
         ui.add_space(4.0);
         ui.label(
             egui::RichText::new(
-                "confsync-agent trayde durur, kaynakları düzenli denetler ve \
-                 değişiklikte bildirim gönderir. Bu ayarlar ajan tarafından her \
-                 turda yeniden okunur; yeniden başlatmak gerekmez.",
+                "confsync-agent sits in the tray, checks sources on a schedule and \
+                 notifies you on change. The agent re-reads these settings every \
+                 round; no restart needed.",
             )
             .size(12.5)
             .color(theme::MUTED),
@@ -1701,25 +1701,25 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(10.0);
 
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("Denetim aralığı").color(theme::MUTED));
+            ui.label(egui::RichText::new("Check interval").color(theme::MUTED));
             if ui
                 .add(egui::DragValue::new(&mut app.settings.agent_interval_min).range(1..=180))
                 .changed()
             {
                 changed = true;
             }
-            ui.label(egui::RichText::new("dakika").size(12.5).color(theme::FAINT));
+            ui.label(egui::RichText::new("minutes").size(12.5).color(theme::FAINT));
         });
 
         ui.add_space(8.0);
         if ui
             .checkbox(
                 &mut app.settings.agent_auto_backup,
-                "Karar gerektirmeyen değişiklikleri kendiliğinden yedekle",
+                "Back up changes that need no decision automatically",
             )
             .on_hover_text(
-                "Sır şüphesi ya da boyut sınırı nedeniyle karar bekleyen dosya varsa \
-                 ajan yine de yedeklemez; yalnızca bildirim gönderir.",
+                "If a file awaits a decision because of a secret suspicion or the size \
+                 limit, the agent still will not back up; it only notifies.",
             )
             .changed()
         {
@@ -1734,13 +1734,13 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
         theme::card().show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
-                theme::caption(ui, &format!("HATIRLANAN KARARLAR ({remembered})"));
+                theme::caption(ui, &format!("REMEMBERED DECISIONS ({remembered})"));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.add(theme::ghost_button("Hepsini unut")).clicked() {
+                    if ui.add(theme::ghost_button("Forget all")).clicked() {
                         app.settings.always_include.clear();
                         app.settings.always_skip.clear();
                         changed = true;
-                        app.info("Hatırlanan kararlar silindi; bu dosyalar yeniden sorulacak.");
+                        app.info("Remembered decisions cleared; these files will be asked about again.");
                     }
                 });
             });
@@ -1760,7 +1760,7 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
                     ui.horizontal(|ui| {
                         theme::badge(
                             ui,
-                            if include { "yedeğe girer" } else { "atlanır" },
+                            if include { "backed up" } else { "skipped" },
                             if include { theme::SUCCESS } else { theme::MUTED },
                         );
                         ui.label(
@@ -1769,7 +1769,7 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
                                 .color(theme::TEXT),
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.add(theme::ghost_button("Unut")).clicked() {
+                            if ui.add(theme::ghost_button("Forget")).clicked() {
                                 forget = Some((path.clone(), include));
                             }
                         });
@@ -1802,14 +1802,14 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
 fn save_row(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         if ui
-            .add_enabled(app.settings_dirty, theme::primary_button("Ayarları kaydet"))
+            .add_enabled(app.settings_dirty, theme::primary_button("Save settings"))
             .clicked()
         {
             app.save_settings();
         }
         if app.settings_dirty {
             ui.label(
-                egui::RichText::new("kaydedilmemiş değişiklik var")
+                egui::RichText::new("unsaved changes")
                     .size(12.5)
                     .color(theme::WARN),
             );

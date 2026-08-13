@@ -22,7 +22,7 @@ impl Drop for Guard {
     fn drop(&mut self) {
         // flock, dosya tanıtıcısı kapanınca çekirdek tarafından bırakılır;
         // dosyayı silmiyoruz ki yarış durumu oluşmasın.
-        log::debug!("yedekleme kilidi bırakıldı: {}", self.path.display());
+        log::debug!("backup lock released: {}", self.path.display());
     }
 }
 
@@ -51,7 +51,7 @@ pub fn acquire(repo_path: &Path) -> Result<Guard> {
         std::fs::create_dir_all(parent)?;
     }
     let file = File::create(&path)
-        .with_context(|| format!("kilit dosyası açılamadı: {}", path.display()))?;
+        .with_context(|| format!("could not open lock file: {}", path.display()))?;
 
     // LOCK_EX | LOCK_NB: beklemeden dene.
     let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
@@ -59,11 +59,11 @@ pub fn acquire(repo_path: &Path) -> Result<Guard> {
         let err = std::io::Error::last_os_error();
         if err.kind() == std::io::ErrorKind::WouldBlock {
             return Err(anyhow!(
-                "başka bir confsync işlemi şu anda yedekleme yapıyor; \
-                 bu çalıştırma atlandı"
+                "another confsync process is backing up right now; \
+                 this run was skipped"
             ));
         }
-        return Err(anyhow!("kilit alınamadı: {err}"));
+        return Err(anyhow!("could not acquire lock: {err}"));
     }
 
     Ok(Guard { _file: file, path })

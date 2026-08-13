@@ -125,7 +125,7 @@ impl BackupPlan {
 
 /// Yedeklemenin tarama aşaması. Hiçbir dosyayı değiştirmez.
 pub fn plan(settings: &Settings, progress: &mut impl Progress) -> Result<BackupPlan> {
-    progress.stage("Dosyalar taranıyor");
+    progress.stage("Scanning files");
     // Tarama aşamasında toplam dosya sayısı önceden bilinmez; arayüz
     // `total == 0` görünce belirsiz (animasyonlu) çubuğa geçer. Geri dönen
     // `false` taramayı da iptal edilebilir kılar.
@@ -180,9 +180,9 @@ pub enum ChangeKind {
 impl ChangeKind {
     pub fn label(&self) -> &'static str {
         match self {
-            ChangeKind::Added => "yeni",
-            ChangeKind::Modified => "değişti",
-            ChangeKind::Removed => "silindi",
+            ChangeKind::Added => "new",
+            ChangeKind::Modified => "modified",
+            ChangeKind::Removed => "removed",
         }
     }
 }
@@ -254,7 +254,7 @@ impl ChangeReport {
         .collect();
 
         if parts.is_empty() {
-            "değişiklik yok".into()
+            "no changes".into()
         } else {
             parts.join(" · ")
         }
@@ -287,7 +287,7 @@ pub fn detect_changes(settings: &Settings, progress: &mut impl Progress) -> Resu
     };
     let mut seen = std::collections::HashSet::new();
 
-    progress.stage("Değişiklikler karşılaştırılıyor");
+    progress.stage("Comparing changes");
     for entry in plan.entries.iter().filter(|e| e.include) {
         let key = entry.item.path.to_string_lossy().to_string();
         seen.insert(key.clone());
@@ -361,7 +361,7 @@ pub fn apply(
         total_bytes: 0,
     };
 
-    progress.stage("Depo hazırlanıyor");
+    progress.stage("Preparing repository");
     let repo = gitrepo::open_or_init(&settings.repo_path, &settings.branch)?;
     gitrepo::set_remote(&repo, &settings.remote_url)?;
     ensure_repo_scaffold(&settings.repo_path)?;
@@ -374,13 +374,13 @@ pub fn apply(
     }
     std::fs::create_dir_all(&files_dir)?;
 
-    progress.stage("Dosyalar kopyalanıyor");
+    progress.stage("Copying files");
     let mut manifest = Manifest::new(&settings.profile, &home.to_string_lossy());
     let total = scanned.items.len();
 
     for (index, item) in scanned.items.iter().enumerate() {
         if !progress.file(&item.path, index + 1, total) {
-            anyhow::bail!("işlem kullanıcı tarafından iptal edildi");
+            anyhow::bail!("cancelled by the user");
         }
 
         let rel = paths::to_repo_rel(&item.path, &home)?;
@@ -411,7 +411,7 @@ pub fn apply(
             }
         } else {
             std::fs::copy(&item.path, &dest).with_context(|| {
-                format!("kopyalanamadı: {} -> {}", item.path.display(), dest.display())
+                format!("could not copy: {} -> {}", item.path.display(), dest.display())
             })?;
             let digest = sha256_file(&dest)?;
             report.bytes += item.size;
@@ -432,13 +432,13 @@ pub fn apply(
         report.stored += 1;
     }
 
-    progress.stage("Manifest yazılıyor");
+    progress.stage("Writing manifest");
     // Dizin okuma sırası platforma göre değişebilir; manifest'in her koşuda
     // birebir aynı çıkması için sıralıyoruz (gereksiz commit olmasın).
     manifest.entries.sort_by(|a, b| a.repo_path.cmp(&b.repo_path));
     manifest.save(&paths::manifest_path(&settings.repo_path, &settings.profile))?;
 
-    progress.stage("Commit oluşturuluyor");
+    progress.stage("Creating commit");
     let message = commit_message(&settings.profile, &manifest);
     report.commit_id = gitrepo::commit_all(
         &repo,
@@ -448,7 +448,7 @@ pub fn apply(
     )?;
 
     if settings.auto_push && !settings.remote_url.trim().is_empty() && report.commit_id.is_some() {
-        progress.stage("Uzak depoya gönderiliyor");
+        progress.stage("Pushing to the remote");
         gitrepo::push(&repo, &settings.branch)?;
         report.pushed = true;
     }
@@ -459,7 +459,7 @@ pub fn apply(
 
 fn commit_message(profile: &str, manifest: &Manifest) -> String {
     format!(
-        "{profile}: {} dosya yedeklendi ({})",
+        "{profile}: {} files backed up ({})",
         manifest.entries.len(),
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
     )
@@ -471,13 +471,13 @@ fn ensure_repo_scaffold(repo_path: &Path) -> Result<()> {
     if !readme.exists() {
         std::fs::write(
             &readme,
-            "# confsync deposu\n\n\
-             Bu depo confsync tarafından yönetilir. Elle düzenlemek yerine \
-             uygulamayı kullanın.\n\n\
-             Düzen:\n\
-             - `profiles/<makine>/manifest.json` — dosya izinleri ve bağlantı hedefleri\n\
-             - `profiles/<makine>/files/home/...` — `$HOME` altındaki dosyalar\n\
-             - `profiles/<makine>/files/root/...` — `/` altındaki diğer dosyalar\n",
+            "# confsync repository\n\n\
+             This repository is managed by confsync. Use the application \
+             instead of editing it by hand.\n\n\
+             Layout:\n\
+             - `profiles/<machine>/manifest.json` — file permissions and link targets\n\
+             - `profiles/<machine>/files/home/...` — files under `$HOME`\n\
+             - `profiles/<machine>/files/root/...` — other files under `/`\n",
         )?;
     }
     let attrs = repo_path.join(".gitattributes");

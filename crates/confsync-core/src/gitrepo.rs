@@ -35,13 +35,13 @@ impl CommitInfo {
 /// Depoyu açar; yoksa oluşturur ve ilk yapılandırmayı yapar.
 pub fn open_or_init(path: &Path, branch: &str) -> Result<Repository> {
     if path.join(".git").exists() {
-        return Repository::open(path).with_context(|| format!("depo açılamadı: {}", path.display()));
+        return Repository::open(path).with_context(|| format!("could not open repository: {}", path.display()));
     }
     std::fs::create_dir_all(path)?;
     let mut opts = git2::RepositoryInitOptions::new();
     opts.initial_head(branch);
     let repo = Repository::init_opts(path, &opts)
-        .with_context(|| format!("depo oluşturulamadı: {}", path.display()))?;
+        .with_context(|| format!("could not create repository: {}", path.display()))?;
     Ok(repo)
 }
 
@@ -125,7 +125,7 @@ pub fn log(repo: &Repository, limit: usize) -> Result<Vec<CommitInfo>> {
         out.push(CommitInfo {
             id: oid.to_string(),
             short_id: oid.to_string()[..7.min(oid.to_string().len())].to_string(),
-            summary: commit.summary().unwrap_or("(başlıksız)").to_string(),
+            summary: commit.summary().unwrap_or("(no subject)").to_string(),
             author: commit.author().name().unwrap_or("-").to_string(),
             timestamp: commit.time().seconds(),
         });
@@ -168,7 +168,7 @@ fn callbacks() -> RemoteCallbacks<'static> {
         }
 
         Err(git2::Error::from_str(
-            "kimlik doğrulanamadı: ssh-agent, ssh anahtarı veya credential helper bulunamadı",
+            "authentication failed: no ssh-agent, ssh key or credential helper found",
         ))
     });
     cb
@@ -177,13 +177,13 @@ fn callbacks() -> RemoteCallbacks<'static> {
 pub fn push(repo: &Repository, branch: &str) -> Result<()> {
     let mut remote = repo
         .find_remote(REMOTE_NAME)
-        .context("uzak depo tanımlı değil")?;
+        .context("no remote configured")?;
     let mut opts = PushOptions::new();
     opts.remote_callbacks(callbacks());
     let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
     remote
         .push(&[refspec.as_str()], Some(&mut opts))
-        .context("push başarısız")?;
+        .context("push failed")?;
     Ok(())
 }
 
@@ -192,13 +192,13 @@ pub fn push(repo: &Repository, branch: &str) -> Result<()> {
 pub fn pull_fast_forward(repo: &Repository, branch: &str) -> Result<PullOutcome> {
     let mut remote = repo
         .find_remote(REMOTE_NAME)
-        .context("uzak depo tanımlı değil")?;
+        .context("no remote configured")?;
 
     let mut fetch_opts = FetchOptions::new();
     fetch_opts.remote_callbacks(callbacks());
     remote
         .fetch(&[branch], Some(&mut fetch_opts), None)
-        .context("fetch başarısız")?;
+        .context("fetch failed")?;
 
     let fetch_head = repo.find_reference("FETCH_HEAD")?;
     let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
@@ -214,7 +214,7 @@ pub fn pull_fast_forward(repo: &Repository, branch: &str) -> Result<PullOutcome>
                 reference.set_target(fetch_commit.id(), "confsync: fast-forward")?;
             }
             Err(_) => {
-                repo.reference(&refname, fetch_commit.id(), true, "confsync: ilk çekme")?;
+                repo.reference(&refname, fetch_commit.id(), true, "confsync: first fetch")?;
             }
         }
         repo.set_head(&refname)?;
@@ -223,7 +223,7 @@ pub fn pull_fast_forward(repo: &Repository, branch: &str) -> Result<PullOutcome>
     }
 
     Err(anyhow!(
-        "yerel ve uzak dallar ayrışmış; birleştirme el ile yapılmalı"
+        "local and remote branches have diverged; merge manually"
     ))
 }
 

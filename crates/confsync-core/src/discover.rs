@@ -187,9 +187,9 @@ pub enum Verdict {
 impl Verdict {
     pub fn label(&self) -> &'static str {
         match self {
-            Verdict::Recommended => "önerilir",
-            Verdict::Optional => "isteğe bağlı",
-            Verdict::Heavy => "ağır",
+            Verdict::Recommended => "recommended",
+            Verdict::Optional => "optional",
+            Verdict::Heavy => "heavy",
         }
     }
 }
@@ -315,7 +315,7 @@ fn classify(name: &str, size: u64, files: usize, truncated: bool) -> (Verdict, S
     if HEAVY_APPS.iter().any(|app| *app == lower) {
         return (
             Verdict::Heavy,
-            "uygulama durumu/önbelleği tutar".to_string(),
+            "holds application state or cache".to_string(),
         );
     }
 
@@ -323,25 +323,25 @@ fn classify(name: &str, size: u64, files: usize, truncated: bool) -> (Verdict, S
     let big = truncated || size > HEAVY_BYTES || files > HEAVY_FILES;
 
     match (curated, big) {
-        (true, false) => (Verdict::Recommended, "bilinen yapılandırma".to_string()),
+        (true, false) => (Verdict::Recommended, "known configuration".to_string()),
         // Bilinen bir yapılandırma beklenmedik şekilde şişmişse yine de
         // kullanıcıya soralım; körlemesine eklemek yedeği büyütür.
         (true, true) => (
             Verdict::Optional,
-            "bilinen yapılandırma, ama beklenenden büyük".to_string(),
+            "known configuration, but larger than expected".to_string(),
         ),
         (false, true) => (Verdict::Heavy, size_reason(size, files, truncated)),
-        (false, false) => (Verdict::Optional, "küçük, içeriği bilinmiyor".to_string()),
+        (false, false) => (Verdict::Optional, "small, contents unknown".to_string()),
     }
 }
 
 fn size_reason(size: u64, files: usize, truncated: bool) -> String {
     if truncated {
-        format!("{MEASURE_LIMIT}+ dosya")
+        format!("{MEASURE_LIMIT}+ files")
     } else if size > HEAVY_BYTES {
         format!("{} MiB", size / (1024 * 1024))
     } else {
-        format!("{files} dosya")
+        format!("{files} files")
     }
 }
 

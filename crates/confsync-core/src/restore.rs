@@ -28,11 +28,11 @@ pub enum Action {
 impl Action {
     pub fn label(&self) -> &'static str {
         match self {
-            Action::Create => "oluşturulacak",
-            Action::Overwrite => "üzerine yazılacak",
-            Action::Unchanged => "değişmedi",
-            Action::Conflict => "çakışma",
-            Action::Missing => "depoda bulunamadı",
+            Action::Create => "to create",
+            Action::Overwrite => "to overwrite",
+            Action::Unchanged => "unchanged",
+            Action::Conflict => "conflict",
+            Action::Missing => "missing in repository",
         }
     }
 
@@ -85,7 +85,7 @@ pub fn plan(settings: &Settings, target_home: &Path) -> Result<RestorePlan> {
     let manifest_path = paths::manifest_path(&settings.repo_path, &settings.profile);
     let manifest = Manifest::load(&manifest_path).with_context(|| {
         format!(
-            "'{}' profili için manifest bulunamadı. Önce yedek alın ya da uzak depodan çekin.",
+            "No manifest found for profile '{}'. Take a backup first, or pull from the remote.",
             settings.profile
         )
     })?;
@@ -135,7 +135,7 @@ fn decide(entry: &Entry, source: &Path, target: &Path) -> Result<(Action, Option
                 }
                 Ok(_) => Ok((
                     Action::Conflict,
-                    Some("hedefte bağlantı yerine gerçek bir dosya/dizin var".into()),
+                    Some("target holds a real file or directory instead of a link".into()),
                 )),
             }
         }
@@ -143,7 +143,7 @@ fn decide(entry: &Entry, source: &Path, target: &Path) -> Result<(Action, Option
             if target.is_dir() {
                 Ok((Action::Unchanged, None))
             } else if target.exists() {
-                Ok((Action::Conflict, Some("hedef bir dizin değil".into())))
+                Ok((Action::Conflict, Some("target is not a directory".into())))
             } else {
                 Ok((Action::Create, None))
             }
@@ -152,14 +152,14 @@ fn decide(entry: &Entry, source: &Path, target: &Path) -> Result<(Action, Option
             if !source.exists() {
                 return Ok((
                     Action::Missing,
-                    Some("depodaki içerik silinmiş olabilir".into()),
+                    Some("repository content may have been deleted".into()),
                 ));
             }
             match std::fs::symlink_metadata(target) {
                 Err(_) => Ok((Action::Create, None)),
                 Ok(meta) if meta.is_dir() => Ok((
                     Action::Conflict,
-                    Some("hedefte aynı isimde bir dizin var".into()),
+                    Some("a directory with the same name exists at the target".into()),
                 )),
                 Ok(_) => {
                     let current = sha256_file(target).ok();
@@ -229,7 +229,7 @@ fn restore_one(item: &PlanItem, rollback_root: Option<&Path>) -> Result<()> {
 
     if let Some(parent) = item.target.parent() {
         std::fs::create_dir_all(parent)
-            .with_context(|| format!("dizin oluşturulamadı: {}", parent.display()))?;
+            .with_context(|| format!("could not create directory: {}", parent.display()))?;
     }
 
     // Mevcut dosyanın yedeğini al.
@@ -257,7 +257,7 @@ fn restore_one(item: &PlanItem, rollback_root: Option<&Path>) -> Result<()> {
                 std::fs::remove_file(&item.target)?;
             }
             std::os::unix::fs::symlink(&target, &item.target)
-                .with_context(|| format!("bağlantı kurulamadı: {}", item.target.display()))?;
+                .with_context(|| format!("could not create link: {}", item.target.display()))?;
         }
         EntryKind::Dir => {
             std::fs::create_dir_all(&item.target)?;
@@ -271,14 +271,14 @@ fn restore_one(item: &PlanItem, rollback_root: Option<&Path>) -> Result<()> {
             let tmp = item.target.with_extension("confsync-tmp");
             std::fs::copy(&item.source, &tmp).with_context(|| {
                 format!(
-                    "kopyalanamadı: {} -> {}",
+                    "could not copy: {} -> {}",
                     item.source.display(),
                     tmp.display()
                 )
             })?;
             std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(item.entry.mode))?;
             std::fs::rename(&tmp, &item.target)
-                .with_context(|| format!("yerine taşınamadı: {}", item.target.display()))?;
+                .with_context(|| format!("could not move into place: {}", item.target.display()))?;
         }
     }
 
