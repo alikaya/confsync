@@ -1,0 +1,57 @@
+# pacman kurulum/kaldırma iletileri.
+#
+# Ajan paketle birlikte "vendor enabled" gelir: etkinleştirme bağlantısı
+# /usr/lib/systemd/user/graphical-session.target.wants/ altındadır, yani
+# kullanıcının `systemctl --user enable` çalıştırmasına gerek yoktur.
+# Kök olarak çalışan pacman, kullanıcının oturumundaki systemd örneğini
+# başlatamayacağı için "şimdi başlat" adımı kullanıcıya bırakılır.
+
+post_install() {
+    cat <<'MSG'
+
+  confsync kuruldu.
+
+    Arayüz : uygulama menüsünde "confsync" (ya da terminalde: confsync)
+    Ajan   : tray ikonu; grafik oturum açıldığında kendiliğinden başlar
+
+  Oturumu yeniden açmadan ajanı şimdi başlatmak için:
+
+      systemctl --user start confsync-agent.service
+
+  Ajanı istemiyorsanız (etkinleştirme paketten geldiği için "disable" değil):
+
+      systemctl --user mask confsync-agent.service
+
+MSG
+}
+
+post_upgrade() {
+    cat <<'MSG'
+
+  confsync güncellendi. Çalışan ajanın yeni sürüme geçmesi için:
+
+      systemctl --user restart confsync-agent.service
+
+MSG
+}
+
+pre_remove() {
+    cat <<'MSG'
+
+  Ajanı durdurmak için (paket kaldırıldıktan sonra birim dosyası da gider):
+
+      systemctl --user stop confsync-agent.service
+
+MSG
+}
+
+post_remove() {
+    cat <<'MSG'
+
+  Ayarlarınız ve yedek deponuz silinmedi:
+
+      ~/.config/confsync/settings.toml
+      ~/.local/share/confsync/
+
+MSG
+}

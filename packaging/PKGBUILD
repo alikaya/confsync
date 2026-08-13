@@ -7,7 +7,7 @@
 
 pkgname=confsync
 pkgver=0.1.0
-pkgrel=3
+pkgrel=4
 pkgdesc='Linux yapılandırma dosyalarını git deposuna yedekleyen masaüstü uygulaması ve tray ajanı'
 arch=('x86_64')
 url='https://example.com/confsync'
@@ -22,6 +22,7 @@ depends=('glibc' 'libgcc' 'openssl' 'zlib-ng-compat' 'hicolor-icon-theme'
          'libglvnd' 'wayland' 'libxkbcommon' 'libxkbcommon-x11'
          'libx11' 'libxcb' 'libxcursor' 'libxi')
 makedepends=('cargo')
+install=confsync.install
 source=()
 sha256sums=()
 
@@ -58,9 +59,16 @@ package() {
   install -Dm644 packaging/confsync.svg \
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/confsync.svg"
 
-  # Kullanıcı servisi: `systemctl --user enable confsync-agent.service`
   install -Dm644 packaging/confsync-agent.service \
     "$pkgdir/usr/lib/systemd/user/confsync-agent.service"
+
+  # Ajan paketle birlikte etkin gelir ("vendor enabled"): etkinleştirme
+  # bağlantısı /usr/lib altında olduğu için kullanıcının `systemctl --user
+  # enable` çalıştırması gerekmez. Vazgeçmek isteyen `mask` eder; kendi
+  # ~/.config'indeki ayarlar bu bağlantıyı her zaman geçersiz kılabilir.
+  install -d "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants"
+  ln -s ../confsync-agent.service \
+    "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/confsync-agent.service"
 
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 

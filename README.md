@@ -32,9 +32,31 @@ makepkg -f                                   # paketi üretir (testleri de çal�
 sudo pacman -U confsync-0.1.0-1-x86_64.pkg.tar.zst
 ```
 
-Paket `confsync` ve `confsync-agent` ikililerini, masaüstü girdisini, ikonu ve
-`confsync-agent.service` kullanıcı birimini kurar. Kaldırmak için
-`sudo pacman -R confsync`.
+Paket şunları kurar:
+
+| | |
+|---|---|
+| `/usr/bin/confsync` | masaüstü arayüzü |
+| `/usr/bin/confsync-agent` | tray ajanı |
+| `/usr/share/applications/confsync.desktop` | uygulama menüsü girdisi |
+| `/usr/lib/systemd/user/confsync-agent.service` | kullanıcı servisi |
+| `…/graphical-session.target.wants/confsync-agent.service` | etkinleştirme bağlantısı |
+
+Son satır sayesinde ajan **paketle birlikte etkin gelir**: `systemctl --user
+enable` çalıştırmak gerekmez, grafik oturum açıldığında kendiliğinden başlar.
+Kurulumdan hemen sonra, oturumu yeniden açmadan başlatmak için:
+
+```bash
+systemctl --user start confsync-agent.service
+```
+
+Ajanı istemiyorsanız `disable` yetmez (etkinleştirme paketten gelir):
+
+```bash
+systemctl --user mask confsync-agent.service
+```
+
+Kaldırmak için `sudo pacman -R confsync`. Ayarlar ve yedek deposu kalır.
 
 Testler (GUI gerekmez):
 
