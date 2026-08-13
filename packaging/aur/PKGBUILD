@@ -10,7 +10,7 @@ pkgver=0.1.0
 pkgrel=1
 pkgdesc='Backs up and restores Linux configuration files in a git repository, with a tray agent'
 arch=('x86_64')
-url='https://git.orilyon.com/alikaya/confsync'
+url='https://github.com/alikaya/confsync'
 license=('MIT')
 # Doğrudan bağlananlar `readelf -d` ile, çalışma anında `dlopen` edilenler
 # ikili içindeki soname dizgileriyle çıkarıldı. namcap ikinci grubu

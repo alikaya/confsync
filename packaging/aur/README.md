@@ -7,30 +7,21 @@ kodu `source=` ile depodan çekilir.
 `../PKGBUILD` ise yerel geliştirme içindir: kaynağı indirmez, çalışma
 ağacındaki `target/release` çıktısını yeniden kullanır.
 
-## Yayınlamadan önce
+## Kaynak deposu
 
-**Kaynak deposu anonim erişime açık olmalı.** Şu an gizli:
+Paket kaynağı GitHub'dan, sürüm etiketiyle çekilir:
 
-```console
-$ curl -s -o /dev/null -w '%{http_code}\n' https://git.orilyon.com/alikaya/confsync
-404
+```
+source=("git+https://github.com/alikaya/confsync.git#tag=v$pkgver")
 ```
 
-AUR'daki hiç kimse (ve `paru`/`yay` gibi yardımcılar) gizli bir depodan
-klonlayamaz. Üç seçenek:
-
-1. Forgejo'da depoyu herkese açık yapın (Settings → Repository → Visibility).
-2. GitHub/Codeberg'e ayna kurun ve `url`/`source` alanlarını oraya çevirin.
-   Uzun vadede daha güvenli: kendi sunucunuz kapandığında paket bozulmaz.
-3. Sürüm tarball'ını sabit bir adrese koyup `source` olarak onu verin.
-
-Depo açıldıktan sonra doğrulama:
+Depo herkese açık; anonim klonlandığını doğrulamak için:
 
 ```bash
-git clone https://git.orilyon.com/alikaya/confsync.git /tmp/anon-test
+git clone https://github.com/alikaya/confsync.git /tmp/anon-test
 ```
 
-Kimlik sormadan klonlanıyorsa hazırdır.
+Kimlik sormadan klonlanıyorsa AUR kullanıcıları da derleyebilir.
 
 ## Gönderim
 
