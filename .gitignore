@@ -4,6 +4,10 @@
 # makepkg çıktıları: paket dosyası ve geçici derleme dizinleri.
 /packaging/pkg/
 /packaging/src/
+/packaging/aur/pkg/
+/packaging/aur/src/
+# makepkg'in git kaynağı için oluşturduğu çıplak klon.
+/packaging/aur/confsync/
 *.pkg.tar.zst
 *.pkg.tar.xz
 
