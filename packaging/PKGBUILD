@@ -10,7 +10,7 @@ pkgver=0.1.0
 pkgrel=4
 pkgdesc='Linux yapılandırma dosyalarını git deposuna yedekleyen masaüstü uygulaması ve tray ajanı'
 arch=('x86_64')
-url='https://example.com/confsync'
+url='https://git.orilyon.com/alikaya/confsync'
 license=('MIT')
 # Bağımlılıklar ikili dosyalardan ölçülerek çıkarıldı:
 #  - doğrudan bağlananlar: readelf -d (DT_NEEDED)
