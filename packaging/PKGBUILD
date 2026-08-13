@@ -7,7 +7,7 @@
 
 pkgname=confsync
 pkgver=0.1.0
-pkgrel=4
+pkgrel=5
 pkgdesc='Linux yapılandırma dosyalarını git deposuna yedekleyen masaüstü uygulaması ve tray ajanı'
 arch=('x86_64')
 url='https://git.orilyon.com/alikaya/confsync'
@@ -73,5 +73,4 @@ package() {
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
-  install -Dm644 DESIGN.md "$pkgdir/usr/share/doc/$pkgname/DESIGN.md"
 }

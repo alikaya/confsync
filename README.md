@@ -1,131 +1,133 @@
 # confsync
 
-Linux yapılandırma dosyalarını git deposuna yedekleyen ve geri yükleyen
-masaüstü uygulaması. Rust + egui.
+Desktop application that backs up and restores Linux configuration files in a
+git repository, with a tray agent that watches for changes. Rust + egui.
 
-Tasarım kararları ve gerekçeleri için [DESIGN.md](DESIGN.md).
-
-## Gereksinimler
+## Requirements
 
 ```bash
 # Rust 1.81+
 rustup update stable
 
-# Derleme bağımlılıkları (Debian/Ubuntu)
+# Build dependencies (Debian/Ubuntu)
 sudo apt install build-essential pkg-config libssl-dev cmake
 
 # Fedora
 sudo dnf install gcc-c++ pkgconf-pkg-config openssl-devel cmake
 ```
 
-## Derleme ve çalıştırma
+## Build and run
 
 ```bash
 cargo run -p confsync-gui --release
 ```
 
-## Arch Linux paketi
+Tests (no GUI required):
+
+```bash
+cargo test --workspace
+```
+
+## Arch Linux package
 
 ```bash
 cd packaging
-makepkg -f                                   # paketi üretir (testleri de çalıştırır)
-sudo pacman -U confsync-0.1.0-1-x86_64.pkg.tar.zst
+makepkg -f                                    # builds the package, runs the tests
+sudo pacman -U confsync-*.pkg.tar.zst
 ```
 
-Paket şunları kurar:
+The package installs:
 
 | | |
 |---|---|
-| `/usr/bin/confsync` | masaüstü arayüzü |
-| `/usr/bin/confsync-agent` | tray ajanı |
-| `/usr/share/applications/confsync.desktop` | uygulama menüsü girdisi |
-| `/usr/lib/systemd/user/confsync-agent.service` | kullanıcı servisi |
-| `…/graphical-session.target.wants/confsync-agent.service` | etkinleştirme bağlantısı |
+| `/usr/bin/confsync` | desktop application |
+| `/usr/bin/confsync-agent` | tray agent |
+| `/usr/share/applications/confsync.desktop` | application menu entry |
+| `/usr/lib/systemd/user/confsync-agent.service` | user service |
+| `…/graphical-session.target.wants/confsync-agent.service` | enablement symlink |
 
-Son satır sayesinde ajan **paketle birlikte etkin gelir**: `systemctl --user
-enable` çalıştırmak gerekmez, grafik oturum açıldığında kendiliğinden başlar.
-Kurulumdan hemen sonra, oturumu yeniden açmadan başlatmak için:
+Because of the last line the agent ships **enabled**: there is no need to run
+`systemctl --user enable`, it starts with the graphical session. To start it
+right after installing, without re-opening your session:
 
 ```bash
 systemctl --user start confsync-agent.service
 ```
 
-Ajanı istemiyorsanız `disable` yetmez (etkinleştirme paketten gelir):
+If you do not want the agent, `disable` is not enough — the enablement comes
+from the package, so mask it:
 
 ```bash
 systemctl --user mask confsync-agent.service
 ```
 
-Kaldırmak için `sudo pacman -R confsync`. Ayarlar ve yedek deposu kalır.
+Remove with `sudo pacman -R confsync`. Settings and the backup repository are
+left in place.
 
-Testler (GUI gerekmez):
+An AUR package is prepared under [`packaging/aur/`](packaging/aur/).
 
-```bash
-cargo test -p confsync-core
-```
+## Usage
 
-## Kullanım
+1. In **Settings**, set the local repository path and, if you have one, the
+   remote URL. Remotes authenticate through your ssh-agent key or the git
+   credential helper; the application never stores a password.
+2. In **Sources**, pick the folders and files to back up. `~/.config` is not
+   added as a whole (it holds browser profiles and application state); known
+   configuration entries are added individually, and the discovery panel
+   measures the rest so you can decide.
+3. In **Excludes**, write patterns using gitignore syntax. Cache directories
+   and well-known key files are already in the default list.
+4. **Back Up Now** scans, copies into the repository and commits. If nothing
+   changed, no empty commit is created. When a file needs a decision — a
+   suspected secret, or one over the size limit — a review window opens first
+   and nothing is written until you confirm.
+5. **Overview** lists what changed since the last backup, with each file's
+   status and size.
+6. In **Restore**, a plan is built first — nothing is written to disk at that
+   point. Once you review the list and confirm, files are written, and a copy
+   of every overwritten file is kept under
+   `~/.local/share/confsync/rollback/`.
 
-1. **Ayarlar** sekmesinde yerel depo yolunu ve varsa uzak depo adresini girin.
-   Uzak depo için ssh-agent'ınızdaki anahtar ya da git credential helper
-   kullanılır; uygulama parola saklamaz.
-2. **Kaynaklar** sekmesinde yedeklenecek klasör ve dosyaları seçin. `~/.config`
-   bütün olarak eklenmez (içinde tarayıcı profilleri ve uygulama durumu vardır);
-   bilinen yapılandırma girdileri tek tek gelir, gerisi için keşif panelini
-   kullanın.
-3. **Hariç Tutulanlar** sekmesinde gitignore sözdizimiyle kalıp yazın.
-   Önbellek dizinleri ve bilinen anahtar dosyaları varsayılan listede zaten var.
-4. **Şimdi Yedekle** düğmesi tarar, depoya kopyalar ve commit atar.
-   Hiçbir şey değişmediyse boş commit atılmaz.
-5. **Geri Yükle** sekmesinde önce plan çıkarılır — bu adımda diske hiçbir şey
-   yazılmaz. Listeyi gözden geçirip onayladığınızda dosyalar yazılır; üzerine
-   yazılan her dosyanın kopyası `~/.local/share/confsync/rollback/` altına alınır.
+## File locations
 
-## Dosya konumları
-
-| Yol | İçerik |
+| Path | Contents |
 |---|---|
-| `~/.config/confsync/settings.toml` | Uygulama ayarları |
-| `~/.local/share/confsync/repo/` | Varsayılan yerel git deposu |
-| `~/.local/share/confsync/rollback/` | Geri yükleme öncesi güvenlik kopyaları |
+| `~/.config/confsync/settings.toml` | application settings |
+| `~/.local/share/confsync/repo/` | default local git repository |
+| `~/.local/share/confsync/rollback/` | safety copies taken before a restore |
 
-## Uyarı
+## Warning
 
-Sır tespiti sezgiseldir ve kesin değildir. Uzak depoyu herkese açık yapmadan
-önce **Genel Bakış** sekmesindeki "Atlanan dosyalar" listesini ve deponun
-içeriğini gözden geçirin.
+Secret detection is heuristic, not exact. Before making a remote repository
+public, review the skipped-files list in **Overview** and the contents of the
+repository itself.
 
-## Ajan (tray)
+## Agent (tray)
 
-`confsync-agent` penceresiz çalışır: trayde bir ikon olarak durur, kaynakları
-düzenli aralıklarla denetler ve değişiklik bulunca bildirim gönderir.
-
-```bash
-cargo run -p confsync-agent --release      # trayde çalıştır
-confsync-agent --once                      # tek denetim, ekrana yaz, çık
-confsync-agent --backup                    # tek yedekleme, çık
-```
-
-İkon rengi durumu gösterir: yeşil (her şey yedeklendi), mavi (bekleyen
-değişiklik), turuncu (kararınız gerekiyor), kırmızı (hata), gri (duraklatıldı).
-Sol tık arayüzü açar; sağ tık menüsünde denetleme, yedekleme ve duraklatma var.
-
-Aralık (varsayılan 5 dakika) ve otomatik yedekleme, arayüzdeki **Ayarlar →
-Ajan** bölümünden yönetilir; ajan bunları her turda yeniden okur.
-
-Karar gerektiren dosya (sır şüphesi, boyut sınırı) varsa ajan **kendiliğinden
-yedeklemez**; yalnızca bildirim gönderir ve kararı arayüzdeki onay penceresine
-bırakır.
-
-Oturum açılışında başlatmak için (paket kuruluysa birim dosyası hazır gelir):
+`confsync-agent` runs without a window: it sits in the tray, checks the
+sources at a regular interval and notifies you when something changed.
 
 ```bash
-systemctl --user enable --now confsync-agent.service
+cargo run -p confsync-agent --release      # run in the tray
+confsync-agent --once                      # one check, print the result, exit
+confsync-agent --backup                    # one backup, exit
 ```
 
-### Neden anlık (inotify) izleme yok?
+The icon colour carries the state: green (everything backed up), blue (pending
+changes), orange (your decision needed), red (error), grey (paused). Left
+click opens the application; the right-click menu offers checking, backing up
+and pausing.
 
-Tam tarama tipik bir yapılandırma ağacı için saniyenin altında sürüyor
-(ölçüm: 648 dosya / 24 MiB için ~0.4 sn). Düzenli yoklama aynı sonucu, watch
-yönetimi ve editörlerin `rename` ile yazma davranışıyla uğraşmadan veriyor.
-Gecikme gerçekten sorun olursa aynı ajana tetikleyici olarak eklenebilir.
+The interval (5 minutes by default) and automatic backup are managed under
+**Settings → Agent**; the agent re-reads them every round.
+
+If any file needs a decision, the agent **never backs up on its own** — it
+only notifies and leaves the decision to the review window. It also does not
+repeat a notification for a change set it has already reported.
+
+### Why no instant (inotify) watching?
+
+A full scan takes well under a second for a typical configuration tree
+(measured: ~0.4 s for 648 files / 24 MiB). Polling gives the same answer
+without managing watches or dealing with editors that write via `rename`.
+If latency ever matters, it can be added to the same agent as a trigger.
