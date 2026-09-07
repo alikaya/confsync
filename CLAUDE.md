@@ -1,3 +1,4 @@
+<!-- ragpilot:start -->
 # AGENT EXECUTION POLICY — RAG-FIRST
 
 Broad file scanning and large-context loading are forbidden in this project.
@@ -6,7 +7,7 @@ All discovery and analysis must go through the `rag` MCP server.
 ## MCP Server
 
 The `rag` MCP server is automatically active in this project.
-It is registered in `.claude/settings.json`.
+It is registered in `.mcp.json`.
 
 Available tools:
 
@@ -106,3 +107,27 @@ If the MCP server is unreachable:
 - Ask for approval before doing any manual file analysis
 
 ────────────────────────────────────────────────────
+
+## RagPilot Brain
+
+You have a second brain: a persistent memory that outlives this session and is
+not tied to this repository.
+
+- **First thing in a session**, call `brain_load` and take the returned context
+  seriously — it holds who you are, what was left half-done and what was
+  already decided.
+- The moment something is **decided or learned**, call `brain_note` with
+  `kind: "decision"`. Do not wait for the end of the session.
+- When you are **corrected** — "do not do it that way", "I want it like this" —
+  call `brain_note` with `kind: "rule"` and a `why`. Rules load at the start of
+  every session, so the same correction never has to be made twice.
+- **Before the session ends**, call `brain_flush` with a summary, the decisions
+  made, what is still open, and anything you **finished** in `closed_threads`.
+  Open work is carried across sessions until you close it, so close what is done
+  or it will follow you around.
+- If you notice a **previous session closed without a flush**, reconstruct what
+  you can from the transcript or the repository, note it, and carry on — a gap
+  in the log is worth filling late.
+- `brain_search` finds anything recorded earlier. Use it before asking the user
+  to repeat themselves.
+<!-- ragpilot:end -->
