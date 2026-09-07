@@ -15,6 +15,9 @@ pub enum State {
     UpToDate,
     /// Değişiklik var, yedeklenmeyi bekliyor.
     Changes { summary: String },
+    /// Yalnızca "sessiz" kaynaklarda değişiklik var: kullanıcıdan bir şey
+    /// beklenmiyor, günlük tur halledecek. İkon sakin kalır.
+    QuietPending { summary: String },
     /// Değişiklik var ama önce kullanıcı kararı gerekiyor.
     NeedsReview { count: usize },
     Working,
@@ -27,6 +30,9 @@ impl State {
         match self {
             State::UpToDate => "Everything is backed up".into(),
             State::Changes { summary } => format!("Pending changes: {summary}"),
+            State::QuietPending { summary } => {
+                format!("Quiet changes ({summary}) — daily backup will take them")
+            }
             State::NeedsReview { count } => {
                 format!("{count} files need your decision")
             }
@@ -41,6 +47,8 @@ impl State {
         match self {
             State::UpToDate => (0x46, 0xD0, 0x8B),   // yeşil
             State::Changes { .. } => (0x6E, 0x7B, 0xFF), // aksan
+            // Eylem gerekmiyor: yeşil kalır, ayrıntı ipucunda.
+            State::QuietPending { .. } => (0x46, 0xD0, 0x8B),
             State::NeedsReview { .. } => (0xE5, 0xA4, 0x4B), // turuncu
             State::Working => (0x8B, 0x95, 0xFF),
             State::Paused => (0x6B, 0x74, 0x83), // soluk

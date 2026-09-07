@@ -193,6 +193,8 @@ pub struct ChangedFile {
     pub kind: ChangeKind,
     /// Silinenlerde son yedekteki boyut, diğerlerinde diskteki güncel boyut.
     pub size: u64,
+    /// "Sessiz" bir kaynağın altında; bildirim üretmez.
+    pub quiet: bool,
 }
 
 /// Son yedeğe göre kaynaklardaki fark.
@@ -222,6 +224,29 @@ impl ChangeReport {
         self.files.iter().map(|f| f.size).sum()
     }
 
+    /// Bildirime konu olan dosyalar: sessiz kaynaklardan gelenler hariç.
+    pub fn notifiable(&self) -> impl Iterator<Item = &ChangedFile> {
+        self.files.iter().filter(|f| !f.quiet)
+    }
+
+    pub fn notifiable_count(&self) -> usize {
+        self.notifiable().count()
+    }
+
+    pub fn quiet_count(&self) -> usize {
+        self.files.iter().filter(|f| f.quiet).count()
+    }
+
+    /// Yalnızca bildirime konu olanların özeti/kimliği. Ajan susma kararını
+    /// bunlara bakarak verir; sessiz kaynaklardaki gürültü etkilemez.
+    pub fn notifiable_summary(&self) -> String {
+        summarize(self.notifiable())
+    }
+
+    pub fn notifiable_fingerprint(&self) -> u64 {
+        fingerprint_of(self.notifiable())
+    }
+
     /// Değişiklik kümesinin kimliği.
     ///
     /// Ajan bunu, aynı bekleyen değişiklik için tekrar tekrar bildirim
@@ -230,35 +255,43 @@ impl ChangeReport {
     /// `files` türe ve yola göre sıralı olduğundan özet çalıştırmalar arasında
     /// da kararlıdır.
     pub fn fingerprint(&self) -> u64 {
-        use std::hash::{Hash, Hasher};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        for file in &self.files {
-            file.kind.hash(&mut hasher);
-            file.path.hash(&mut hasher);
-        }
-        hasher.finish()
+        fingerprint_of(self.files.iter())
     }
 
     /// Bildirimde ve durum çubuğunda gösterilen tek satırlık özet.
     pub fn summary(&self) -> String {
-        let parts: Vec<String> = [
-            ChangeKind::Added,
-            ChangeKind::Modified,
-            ChangeKind::Removed,
-        ]
+        summarize(self.files.iter())
+    }
+}
+
+fn summarize<'a>(files: impl Iterator<Item = &'a ChangedFile>) -> String {
+    let mut counts = [0usize; 3];
+    for file in files {
+        counts[file.kind as usize] += 1;
+    }
+    let parts: Vec<String> = [ChangeKind::Added, ChangeKind::Modified, ChangeKind::Removed]
         .iter()
         .filter_map(|kind| {
-            let count = self.count(*kind);
+            let count = counts[*kind as usize];
             (count > 0).then(|| format!("{count} {}", kind.label()))
         })
         .collect();
 
-        if parts.is_empty() {
-            "no changes".into()
-        } else {
-            parts.join(" · ")
-        }
+    if parts.is_empty() {
+        "no changes".into()
+    } else {
+        parts.join(" · ")
     }
+}
+
+fn fingerprint_of<'a>(files: impl Iterator<Item = &'a ChangedFile>) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for file in files {
+        file.kind.hash(&mut hasher);
+        file.path.hash(&mut hasher);
+    }
+    hasher.finish()
 }
 
 /// Kaynakları son yedekle karşılaştırır. **Hiçbir dosyayı değiştirmez.**
@@ -282,7 +315,13 @@ pub fn detect_changes(settings: &Settings, progress: &mut impl Progress) -> Resu
     };
 
     let mut report = ChangeReport {
-        questions: plan.question_count(),
+        // Sessiz kaynaklardaki karar bekleyen dosyalar sayılmaz: "sessiz"in
+        // sözü, oradan hiçbir bildirim çıkmaması.
+        questions: plan
+            .entries
+            .iter()
+            .filter(|e| e.question.is_some() && !settings.is_quiet_path(&e.item.path))
+            .count(),
         ..Default::default()
     };
     let mut seen = std::collections::HashSet::new();
@@ -313,6 +352,7 @@ pub fn detect_changes(settings: &Settings, progress: &mut impl Progress) -> Resu
 
         if let Some(kind) = kind {
             report.files.push(ChangedFile {
+                quiet: settings.is_quiet_path(&entry.item.path),
                 path: entry.item.path.clone(),
                 kind,
                 size: entry.item.size,
@@ -322,8 +362,10 @@ pub fn detect_changes(settings: &Settings, progress: &mut impl Progress) -> Resu
 
     for (key, entry) in &previous {
         if !seen.contains(key) {
+            let path = PathBuf::from(&entry.origin_path);
             report.files.push(ChangedFile {
-                path: PathBuf::from(&entry.origin_path),
+                quiet: settings.is_quiet_path(&path),
+                path,
                 kind: ChangeKind::Removed,
                 size: entry.size,
             });
@@ -336,6 +378,22 @@ pub fn detect_changes(settings: &Settings, progress: &mut impl Progress) -> Resu
         .sort_by(|a, b| a.kind.cmp(&b.kind).then_with(|| a.path.cmp(&b.path)));
 
     Ok(report)
+}
+
+/// Günlük sessiz turun zamanı geldi mi?
+///
+/// Ölçüt son commit'in yaşı: ayrı bir durum dosyası tutmaya gerek yok, depo
+/// bu bilgiyi zaten taşıyor ve elle alınan yedek de sayacı ilerletir.
+/// Hiç yedek yoksa ilk tur hemen alınır.
+pub fn daily_due(settings: &Settings, now: i64) -> bool {
+    const DAY: i64 = 24 * 60 * 60;
+    if !settings.agent_daily_backup {
+        return false;
+    }
+    match gitrepo::last_commit_time(&settings.repo_path) {
+        Some(last) => now - last >= DAY,
+        None => true,
+    }
 }
 
 /// Planı uygular: dosyaları depoya kopyalar, manifest yazar, commit'ler.

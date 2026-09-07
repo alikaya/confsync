@@ -152,6 +152,15 @@ fn check_cycle(
     tx: &Sender<Cmd>,
     last_notified: &mut Option<u64>,
 ) {
+    // Günlük tur her şeyden önce gelir: süresi dolduysa sessizce yedekle ve
+    // (uzak tanımlıysa) push et. Bildirim üretmez.
+    if backup::daily_due(settings, chrono::Utc::now().timestamp()) {
+        run_daily(handle, settings);
+        *last_notified = None;
+        stamp(handle);
+        return;
+    }
+
     set_state(handle, State::Working);
 
     let report = match backup::detect_changes(settings, &mut NoProgress) {
@@ -169,7 +178,12 @@ fn check_cycle(
         }
     };
 
-    log::info!("check: {} · awaiting decision: {}", report.summary(), report.questions);
+    log::info!(
+        "check: {} (quiet: {}) · awaiting decision: {}",
+        report.summary(),
+        report.quiet_count(),
+        report.questions
+    );
 
     if report.is_empty() {
         set_state(handle, State::UpToDate);
@@ -178,9 +192,23 @@ fn check_cycle(
         return;
     }
 
+    // Yalnızca sessiz kaynaklarda değişiklik varsa kullanıcı rahatsız
+    // edilmez; günlük tur bunları alacak.
+    if report.notifiable_count() == 0 {
+        set_state(
+            handle,
+            State::QuietPending {
+                summary: report.summary(),
+            },
+        );
+        *last_notified = None;
+        stamp(handle);
+        return;
+    }
+
     // Tray ikonu her zaman güncel durumu gösterir; susturulan yalnızca
     // açılır bildirimdir.
-    let fingerprint = report.fingerprint();
+    let fingerprint = report.notifiable_fingerprint();
     let already_told = *last_notified == Some(fingerprint);
     if already_told {
         log::info!("same change set; notification not repeated");
@@ -211,7 +239,7 @@ fn check_cycle(
         set_state(
             handle,
             State::Changes {
-                summary: report.summary(),
+                summary: report.notifiable_summary(),
             },
         );
         if !already_told {
@@ -219,6 +247,36 @@ fn check_cycle(
         }
     }
     stamp(handle);
+}
+
+/// Günlük sessiz tur: yedekler ve uzak tanımlıysa push eder, bildirim yok.
+fn run_daily(handle: &ksni::blocking::Handle<Tray>, settings: &Settings) {
+    set_state(handle, State::Working);
+
+    // Push bu özelliğin sözünün parçası; `auto_push` ayarından bağımsız
+    // olarak, uzak tanımlıysa gönderilir.
+    let mut daily = settings.clone();
+    daily.auto_push = !settings.remote_url.trim().is_empty();
+
+    match backup::run(&daily, &mut NoProgress) {
+        Ok(report) if report.had_changes() => log::info!(
+            "daily backup: {} files{}",
+            report.stored,
+            if report.pushed { ", pushed" } else { "" }
+        ),
+        Ok(_) => log::info!("daily backup: nothing changed"),
+        Err(err) => {
+            log::error!("daily backup failed: {err:#}");
+            set_state(
+                handle,
+                State::Error {
+                    message: first_line(&format!("{err:#}")),
+                },
+            );
+            return;
+        }
+    }
+    set_state(handle, State::UpToDate);
 }
 
 fn run_backup(handle: &ksni::blocking::Handle<Tray>, settings: &Settings) {

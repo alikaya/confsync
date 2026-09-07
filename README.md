@@ -125,6 +125,22 @@ If any file needs a decision, the agent **never backs up on its own** — it
 only notifies and leaves the decision to the review window. It also does not
 repeat a notification for a change set it has already reported.
 
+### Quiet sources and the daily backup
+
+Some folders change all day long, and being told about them is pure noise.
+Mark those sources **quiet** in the Sources tab: changes there never raise a
+notification and never turn the tray icon busy. They still show up in the
+Overview table, tagged `quiet`.
+
+Pair that with **Settings → Agent → "Once a day, back up and push quietly"**:
+at most once every 24 hours the agent takes a normal backup and pushes it, in
+silence. Whether the day is up is decided from the age of the last commit, so
+a manual backup also counts and no extra state file is needed.
+
+A file awaiting a decision inside a quiet source is not counted either — the
+promise of "quiet" is that nothing comes out of it. It simply stays out of the
+backup until you include it from the review window.
+
 ### Why no instant (inotify) watching?
 
 A full scan takes well under a second for a typical configuration tree

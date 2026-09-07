@@ -6,8 +6,8 @@
 # paketleme dakikalar yerine saniyeler sürer.
 
 pkgname=confsync
-pkgver=0.1.0
-pkgrel=5
+pkgver=0.2.0
+pkgrel=1
 pkgdesc='Linux yapılandırma dosyalarını git deposuna yedekleyen masaüstü uygulaması ve tray ajanı'
 arch=('x86_64')
 url='https://github.com/alikaya/confsync'

@@ -14,6 +14,10 @@ pub struct Source {
     /// Kullanıcının arayüzde gördüğü kısa etiket.
     #[serde(default)]
     pub label: String,
+    /// Gün içinde sürekli değişen kaynak. Buradaki değişiklikler bildirim
+    /// üretmez ve tray'i meşgul göstermez; günlük yedekle sessizce alınır.
+    #[serde(default)]
+    pub quiet: bool,
 }
 
 impl Source {
@@ -23,7 +27,7 @@ impl Source {
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| path.display().to_string());
-        Self { path, enabled: true, label }
+        Self { path, enabled: true, label, quiet: false }
     }
 }
 
@@ -64,6 +68,9 @@ pub struct Settings {
     pub agent_interval_min: u64,
     /// Ajan, karar gerektirmeyen değişiklikleri kendiliğinden yedeklesin mi.
     pub agent_auto_backup: bool,
+    /// Günde bir kez sessizce yedekle ve (uzak tanımlıysa) push et.
+    /// Sürekli değişen kaynaklar için: bildirim yok, gün sonunda tek tur.
+    pub agent_daily_backup: bool,
 }
 
 impl Default for Settings {
@@ -87,6 +94,7 @@ impl Default for Settings {
             always_ask: false,
             agent_interval_min: 5,
             agent_auto_backup: false,
+            agent_daily_backup: false,
         }
     }
 }
@@ -126,6 +134,14 @@ impl Settings {
 
     pub fn max_file_size_bytes(&self) -> u64 {
         self.max_file_size_mb.saturating_mul(1024 * 1024)
+    }
+
+    /// Bu yol "sessiz" işaretli bir kaynağın altında mı?
+    /// `starts_with` bileşen bazlıdır: `/a/bc`, `/a/b` ile eşleşmez.
+    pub fn is_quiet_path(&self, path: &Path) -> bool {
+        self.sources
+            .iter()
+            .any(|s| s.quiet && path.starts_with(&s.path))
     }
 
     /// Kullanıcı bu yol için daha önce "yine de al" dedi mi?

@@ -271,3 +271,10 @@ mod tests {
         );
     }
 }
+
+/// Son commit'in zamanı (unix saniye); depo yoksa `None`.
+/// [`open_or_init`]'ten farkı: depoyu **oluşturmaz**, salt okurdur.
+pub fn last_commit_time(repo_path: &Path) -> Option<i64> {
+    let repo = Repository::open(repo_path).ok()?;
+    log(&repo, 1).ok()?.first().map(|c| c.timestamp)
+}

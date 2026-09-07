@@ -801,6 +801,9 @@ fn changes_table(app: &mut App, ui: &mut egui::Ui, home: &std::path::Path) {
                                     theme::TEXT
                                 }),
                         );
+                        if file.quiet {
+                            theme::badge(ui, "quiet", theme::FAINT);
+                        }
                         ui.with_layout(
                             egui::Layout::right_to_left(egui::Align::Center),
                             |ui| {
@@ -1019,6 +1022,18 @@ pub fn sources(app: &mut App, ui: &mut egui::Ui) {
                                     .on_hover_text(
                                         "On-disk size (exclude patterns not applied)",
                                     );
+                                    ui.add_space(6.0);
+                                    if ui
+                                        .checkbox(&mut source.quiet, "quiet")
+                                        .on_hover_text(
+                                            "Changes here never notify. They ride the \
+                                             daily backup instead — for folders that \
+                                             churn all day.",
+                                        )
+                                        .changed()
+                                    {
+                                        changed = true;
+                                    }
                                 },
                             );
                         });
@@ -1712,6 +1727,20 @@ pub fn settings(app: &mut App, ui: &mut egui::Ui) {
         });
 
         ui.add_space(8.0);
+        if ui
+            .checkbox(
+                &mut app.settings.agent_daily_backup,
+                "Once a day, back up and push quietly",
+            )
+            .on_hover_text(
+                "Runs at most once every 24 hours, without notifying. Intended for \
+                 sources marked \"quiet\" in the Sources tab. Pushes when a remote \
+                 is configured.",
+            )
+            .changed()
+        {
+            changed = true;
+        }
         if ui
             .checkbox(
                 &mut app.settings.agent_auto_backup,
